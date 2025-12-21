@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "copilot-memory": {
+      "command": "node",
+      "args": ["~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js"],
+      "env": {
+        "LOG_LEVEL": "info",
+        "MEMORY_PATH": "~/.claude/memory"
+      }
+    },
+    "skills-copilot": {
+      "command": "node",
+      "args": ["~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
+      "env": {
+        "LOG_LEVEL": "info",
+        "LOCAL_SKILLS_PATH": "~/.claude/copilot/skills"
+      }
+    }
+  }
+}

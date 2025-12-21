@@ -24,8 +24,13 @@ tmp/
 temp/
 *.tmp
 
-# Node (if scripts use Node)
+# Node
 node_modules/
+
+# MCP server builds
+mcp-servers/*/dist/
+mcp-servers/*/*.db
+mcp-servers/*/*.db-*
 
 # Python (if scripts use Python)
 __pycache__/

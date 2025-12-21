@@ -1,0 +1,517 @@
+#!/usr/bin/env node
+/**
+ * Skills Hub MCP Server
+ *
+ * On-demand skill loading from multiple sources:
+ * - Private database (Postgres) for proprietary skills
+ * - SkillsMP API for 25,000+ public skills
+ * - Local files for git-synced skills
+ * - SQLite cache for fast repeated access
+ */
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+
+import { SkillsMPProvider, PostgresProvider, CacheProvider, LocalProvider } from './providers/index.js';
+import type { SkillsHubConfig, Skill, SkillMeta, SkillMatch, SkillSource, SkillSaveParams } from './types.js';
+
+// Configuration from environment
+const config: SkillsHubConfig = {
+  skillsmpApiKey: process.env.SKILLSMP_API_KEY,
+  postgresUrl: process.env.POSTGRES_URL,
+  cachePath: process.env.CACHE_PATH || '~/.claude/skills-cache',
+  cacheTtlDays: parseInt(process.env.CACHE_TTL_DAYS || '7', 10),
+  localSkillsPath: process.env.LOCAL_SKILLS_PATH || './03-ai-enabling/01-skills',
+  logLevel: (process.env.LOG_LEVEL || 'info') as SkillsHubConfig['logLevel']
+};
+
+// Initialize providers
+const cache = new CacheProvider(config.cachePath, config.cacheTtlDays);
+const local = new LocalProvider(config.localSkillsPath || '');
+const skillsmp = config.skillsmpApiKey ? new SkillsMPProvider(config.skillsmpApiKey) : null;
+const postgres = config.postgresUrl ? new PostgresProvider(config.postgresUrl) : null;
+
+// Create MCP server
+const server = new Server(
+  {
+    name: 'skills-hub',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Tool definitions
+const TOOLS = [
+  {
+    name: 'skill_get',
+    description: 'Fetch a skill by name. Checks cache, then private DB, then SkillsMP, then local files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Skill name to fetch' },
+        forceRefresh: { type: 'boolean', description: 'Skip cache and fetch fresh' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'skill_search',
+    description: 'Search for skills across all sources by query',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        source: {
+          type: 'string',
+          enum: ['private', 'skillsmp', 'local', 'all'],
+          description: 'Limit search to specific source'
+        },
+        limit: { type: 'number', description: 'Max results (default 10)' }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'skill_list',
+    description: 'List available skills from specified source',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        source: {
+          type: 'string',
+          enum: ['private', 'local', 'cache', 'all'],
+          description: 'Source to list from (default: all)'
+        }
+      }
+    }
+  },
+  {
+    name: 'skill_save',
+    description: 'Save a skill to the private database',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Skill name' },
+        description: { type: 'string', description: 'Brief description' },
+        content: { type: 'string', description: 'Full SKILL.md content' },
+        category: { type: 'string', description: 'Category (e.g., analysis, engineering)' },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Keywords for matching'
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional tags'
+        },
+        isProprietary: { type: 'boolean', description: 'Mark as proprietary (default: true)' }
+      },
+      required: ['name', 'description', 'content', 'keywords']
+    }
+  },
+  {
+    name: 'skill_cache_clear',
+    description: 'Clear the skill cache',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Specific skill to clear (omit for all)' }
+      }
+    }
+  },
+  {
+    name: 'skills_hub_status',
+    description: 'Get status of all providers',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  }
+];
+
+/**
+ * Get skill from best available source
+ */
+async function getSkill(name: string, forceRefresh = false): Promise<{ skill: Skill | null; source: SkillSource }> {
+  // 1. Check cache (unless forcing refresh)
+  if (!forceRefresh) {
+    const cached = cache.get(name);
+    if (cached) {
+      return {
+        skill: {
+          id: `cache-${name}`,
+          name,
+          description: '',
+          content: cached.content,
+          keywords: [],
+          source: 'cache',
+          version: '1.0.0',
+          isProprietary: false
+        },
+        source: 'cache'
+      };
+    }
+  }
+
+  // 2. Check private database
+  if (postgres?.isConnected()) {
+    const result = await postgres.getSkill(name);
+    if (result.success && result.data) {
+      cache.set(name, result.data.content, 'private');
+      return { skill: result.data, source: 'private' };
+    }
+  }
+
+  // 3. Check SkillsMP
+  if (skillsmp) {
+    const result = await skillsmp.getSkillByName(name);
+    if (result.success && result.data) {
+      cache.set(name, result.data.content, 'skillsmp');
+      return {
+        skill: {
+          id: result.data.meta.id,
+          name: result.data.meta.name,
+          description: result.data.meta.description,
+          content: result.data.content,
+          keywords: result.data.meta.keywords,
+          author: result.data.meta.author,
+          source: 'skillsmp',
+          version: '1.0.0',
+          isProprietary: false
+        },
+        source: 'skillsmp'
+      };
+    }
+  }
+
+  // 4. Check local files
+  const localResult = local.getSkill(name);
+  if (localResult.success && localResult.data) {
+    cache.set(name, localResult.data.content, 'local');
+    return { skill: localResult.data, source: 'local' };
+  }
+
+  return { skill: null, source: 'cache' };
+}
+
+/**
+ * Search skills across sources
+ */
+async function searchSkills(
+  query: string,
+  source: 'private' | 'skillsmp' | 'local' | 'all' = 'all',
+  limit = 10
+): Promise<SkillMatch[]> {
+  const results: SkillMatch[] = [];
+
+  // Search private DB
+  if ((source === 'all' || source === 'private') && postgres?.isConnected()) {
+    const privateResults = await postgres.searchSkills(query, limit);
+    if (privateResults.success && privateResults.data) {
+      results.push(...privateResults.data);
+    }
+  }
+
+  // Search SkillsMP
+  if ((source === 'all' || source === 'skillsmp') && skillsmp) {
+    const publicResults = await skillsmp.searchSkills(query, limit);
+    if (publicResults.success && publicResults.data) {
+      results.push(...publicResults.data);
+    }
+  }
+
+  // Search local
+  if (source === 'all' || source === 'local') {
+    const localResults = local.searchSkills(query);
+    if (localResults.success && localResults.data) {
+      results.push(...localResults.data.map(m => ({ ...m, relevance: 0.5 })));
+    }
+  }
+
+  // Sort by relevance and dedupe
+  const seen = new Set<string>();
+  return results
+    .sort((a, b) => (b.relevance || 0) - (a.relevance || 0))
+    .filter(skill => {
+      if (seen.has(skill.name)) return false;
+      seen.add(skill.name);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+/**
+ * List skills from source
+ */
+async function listSkills(source: 'private' | 'local' | 'cache' | 'all' = 'all'): Promise<SkillMeta[]> {
+  const results: SkillMeta[] = [];
+
+  if ((source === 'all' || source === 'private') && postgres?.isConnected()) {
+    const privateResults = await postgres.listSkills();
+    if (privateResults.success && privateResults.data) {
+      results.push(...privateResults.data);
+    }
+  }
+
+  if (source === 'all' || source === 'local') {
+    const localResults = local.listSkills();
+    if (localResults.success && localResults.data) {
+      results.push(...localResults.data);
+    }
+  }
+
+  if (source === 'all' || source === 'cache') {
+    const cachedSkills = cache.list();
+    results.push(...cachedSkills.map(c => ({
+      id: `cache-${c.name}`,
+      name: c.name,
+      description: `Cached from ${c.source}`,
+      keywords: [],
+      source: 'cache' as const
+    })));
+  }
+
+  // Dedupe by name
+  const seen = new Set<string>();
+  return results.filter(skill => {
+    if (seen.has(skill.name)) return false;
+    seen.add(skill.name);
+    return true;
+  });
+}
+
+// Handle list tools
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: TOOLS
+}));
+
+// Handle tool calls
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args = {} } = request.params;
+  const a = args as Record<string, unknown>;
+
+  try {
+    switch (name) {
+      case 'skill_get': {
+        const result = await getSkill(
+          a.name as string,
+          a.forceRefresh as boolean | undefined
+        );
+
+        if (!result.skill) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Skill not found: ${a.name}\n\nTry searching with skill_search to find available skills.`
+            }]
+          };
+        }
+
+        // Return the full skill content
+        return {
+          content: [{
+            type: 'text',
+            text: `# Skill: ${result.skill.name}\n\n**Source:** ${result.source}\n**Author:** ${result.skill.author || 'Unknown'}\n\n---\n\n${result.skill.content}`
+          }]
+        };
+      }
+
+      case 'skill_search': {
+        const results = await searchSkills(
+          a.query as string,
+          a.source as 'private' | 'skillsmp' | 'local' | 'all' | undefined,
+          a.limit as number | undefined
+        );
+
+        if (results.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: `No skills found for query: "${a.query}"`
+            }]
+          };
+        }
+
+        const table = results.map(s =>
+          `| ${s.name} | ${s.source} | ${s.author || '-'} | ${s.description.slice(0, 60)}... |`
+        ).join('\n');
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Search Results for "${a.query}"\n\n| Skill | Source | Author | Description |\n|-------|--------|--------|-------------|\n${table}\n\nUse \`skill_get(name)\` to load full content.`
+          }]
+        };
+      }
+
+      case 'skill_list': {
+        const results = await listSkills(
+          a.source as 'private' | 'local' | 'cache' | 'all' | undefined
+        );
+
+        const grouped: Record<string, SkillMeta[]> = {};
+        for (const skill of results) {
+          const src = skill.source;
+          if (!grouped[src]) grouped[src] = [];
+          grouped[src].push(skill);
+        }
+
+        let output = '## Available Skills\n\n';
+        for (const [source, skills] of Object.entries(grouped)) {
+          output += `### ${source.charAt(0).toUpperCase() + source.slice(1)} (${skills.length})\n\n`;
+          output += '| Name | Category | Keywords |\n|------|----------|----------|\n';
+          for (const skill of skills) {
+            output += `| ${skill.name} | ${skill.category || '-'} | ${skill.keywords.slice(0, 3).join(', ')} |\n`;
+          }
+          output += '\n';
+        }
+
+        return { content: [{ type: 'text', text: output }] };
+      }
+
+      case 'skill_save': {
+        if (!postgres?.isConnected()) {
+          return {
+            content: [{ type: 'text', text: 'Error: PostgreSQL not connected. Cannot save skills.' }],
+            isError: true
+          };
+        }
+
+        const params: SkillSaveParams = {
+          name: a.name as string,
+          description: a.description as string,
+          content: a.content as string,
+          category: a.category as string | undefined,
+          keywords: a.keywords as string[],
+          tags: a.tags as string[] | undefined,
+          isProprietary: a.isProprietary as boolean | undefined
+        };
+
+        const result = await postgres.saveSkill(params);
+
+        if (!result.success) {
+          return {
+            content: [{ type: 'text', text: `Error saving skill: ${result.error}` }],
+            isError: true
+          };
+        }
+
+        // Invalidate cache
+        cache.invalidate(params.name);
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Skill saved successfully: ${params.name}\n\nID: ${result.data?.id}`
+          }]
+        };
+      }
+
+      case 'skill_cache_clear': {
+        if (a.name) {
+          const cleared = cache.invalidate(a.name as string);
+          return {
+            content: [{
+              type: 'text',
+              text: cleared
+                ? `Cache cleared for: ${a.name}`
+                : `Skill not in cache: ${a.name}`
+            }]
+          };
+        }
+
+        cache.clear();
+        return {
+          content: [{ type: 'text', text: 'All cache cleared' }]
+        };
+      }
+
+      case 'skills_hub_status': {
+        const cacheStats = cache.getStats();
+        const localCount = local.getCount();
+
+        const status = {
+          providers: {
+            postgres: postgres?.isConnected() ? 'connected' : 'not configured',
+            skillsmp: skillsmp ? 'configured' : 'not configured',
+            local: `${localCount} skills found`,
+            cache: `${cacheStats.total} cached (${Math.round(cacheStats.size / 1024)}KB)`
+          },
+          config: {
+            cachePath: config.cachePath,
+            cacheTtlDays: config.cacheTtlDays,
+            localSkillsPath: config.localSkillsPath
+          }
+        };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(status, null, 2) }]
+        };
+      }
+
+      default:
+        return {
+          content: [{ type: 'text', text: `Unknown tool: ${name}` }],
+          isError: true
+        };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return {
+      content: [{ type: 'text', text: `Error: ${message}` }],
+      isError: true
+    };
+  }
+});
+
+// Start server
+async function main() {
+  // Connect to Postgres if configured
+  if (postgres) {
+    const connected = await postgres.connect();
+    if (config.logLevel === 'debug') {
+      console.error(`Postgres: ${connected ? 'connected' : 'failed to connect'}`);
+    }
+  }
+
+  if (config.logLevel === 'debug') {
+    console.error('Skills Hub server starting...');
+    console.error(`SkillsMP: ${skillsmp ? 'configured' : 'not configured'}`);
+    console.error(`Local skills: ${local.getCount()} found`);
+    console.error(`Cache: ${cache.getStats().total} entries`);
+  }
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  if (config.logLevel === 'debug') {
+    console.error('Skills Hub server running');
+  }
+}
+
+main().catch((error) => {
+  console.error('Server error:', error);
+  process.exit(1);
+});
+
+// Cleanup on exit
+process.on('SIGINT', () => {
+  cache.close();
+  postgres?.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  cache.close();
+  postgres?.close();
+  process.exit(0);
+});

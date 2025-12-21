@@ -1,12 +1,42 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the Claude-Copilot framework.
+This file provides guidance to Claude Code when working with the Claude Copilot framework.
 
 ## Overview
 
-Claude-Copilot is an AI-enabled development framework providing 11 specialized agents for software development.
+**Claude Copilot** is a complete AI-enabled development framework solving four challenges:
 
-## Agents
+| Challenge | Solution | Component |
+|-----------|----------|-----------|
+| Lost memory, wasted tokens | Persistent memory + semantic search | **Memory Copilot** |
+| Generic AI lacks expertise | Specialized agents for complex tasks | **Agents** |
+| Manual skill management | On-demand skill loading | **Skills Copilot** |
+| Inconsistent processes | Battle-tested workflows | **Protocol** |
+
+---
+
+## The Four Pillars
+
+### 1. Memory Copilot
+
+MCP server providing persistent memory across sessions.
+
+**Location:** `mcp-servers/copilot-memory/`
+
+| Tool | Purpose |
+|------|---------|
+| `initiative_get` | Retrieve current initiative |
+| `initiative_start` | Begin new initiative |
+| `initiative_update` | Update progress, decisions, lessons |
+| `initiative_complete` | Archive completed initiative |
+| `memory_store` | Store decisions, lessons, context |
+| `memory_search` | Semantic search across memories |
+
+### 2. Agents
+
+11 specialized agents for complex development tasks.
+
+**Location:** `.claude/agents/`
 
 | Agent | Name | Domain |
 |-------|------|--------|
@@ -22,6 +52,32 @@ Claude-Copilot is an AI-enabled development framework providing 11 specialized a
 | `uid` | UI Developer | UI implementation |
 | `cw` | Copywriter | Content/copy |
 
+### 3. Skills Copilot
+
+MCP server for on-demand skill loading.
+
+**Location:** `mcp-servers/skills-copilot/`
+
+| Tool | Purpose |
+|------|---------|
+| `skill_get` | Load specific skill by name |
+| `skill_search` | Search skills across sources |
+| `skill_list` | List available skills |
+| `skill_save` | Save skill to private DB |
+
+### 4. Protocol
+
+Commands enforcing battle-tested workflows.
+
+**Location:** `.claude/commands/`
+
+| Command | Purpose |
+|---------|---------|
+| `/protocol` | Start fresh work with Agent-First Protocol |
+| `/continue` | Resume previous work via Memory Copilot |
+
+---
+
 ## Agent Routing
 
 Agents route to each other based on expertise:
@@ -36,6 +92,36 @@ Agents route to each other based on expertise:
 | Any | `me` | Code implementation |
 | Any | `qa` | Testing needed |
 | Any | `doc` | Documentation needed |
+
+---
+
+## Installation
+
+### One-Time Setup (Per Machine)
+
+```bash
+# Clone to global location
+mkdir -p ~/.claude
+cd ~/.claude
+git clone https://github.com/Everyone-Needs-A-Copilot/claude-copilot.git copilot
+
+# Build MCP servers
+cd copilot/mcp-servers/copilot-memory && npm install && npm run build
+cd ../skills-copilot && npm install && npm run build
+```
+
+### Per-Project Setup
+
+```bash
+# Copy MCP config template
+cp ~/.claude/copilot/templates/mcp.json ./.mcp.json
+
+# Create CLAUDE.md from template
+cp ~/.claude/copilot/templates/CLAUDE.template.md ./CLAUDE.md
+# Edit CLAUDE.md with project-specific details
+```
+
+---
 
 ## Extension System
 
@@ -56,20 +142,45 @@ Check for `knowledge-manifest.json` in:
 - `docs/shared/`
 - Parent directories
 
-### Applying Extensions
-
-1. Load `knowledge-manifest.json`
-2. For each extension, check if required skills are available
-3. Apply based on extension type
-4. Fall back to base agent if skills unavailable
+---
 
 ## File Locations
 
 | Content | Location |
 |---------|----------|
-| Base agents | `.claude/agents/` |
+| Agents | `.claude/agents/` |
+| Commands | `.claude/commands/` |
+| MCP Servers | `mcp-servers/` |
+| Operations docs | `docs/operations/` |
+| Templates | `templates/` |
 | Extension spec | `docs/EXTENSION-SPEC.md` |
-| Manifest schema | `docs/knowledge-manifest-schema.json` |
+
+---
+
+## Session Management
+
+### Starting Fresh Work
+
+Use `/protocol` to activate the Agent-First Protocol.
+
+### Resuming Previous Work
+
+Use `/continue` to load context from Memory Copilot.
+
+### End of Session
+
+Call `initiative_update` with:
+
+| Field | Content |
+|-------|---------|
+| `completed` | Tasks finished |
+| `inProgress` | Current state |
+| `resumeInstructions` | Next steps |
+| `lessons` | Insights gained |
+| `decisions` | Choices made |
+| `keyFiles` | Important files touched |
+
+---
 
 ## Development Guidelines
 
@@ -80,20 +191,7 @@ Check for `knowledge-manifest.json` in:
 - Include routing to other agents
 - Document decision authority
 
-### When Adding Skills
-
-- Skills go in `.claude/skills/`
-- Keep skills focused and standalone
-- Document when each skill should be used
-
-## Commands
-
-| Task | Command |
-|------|---------|
-| Copy to project | `cp -r .claude /path/to/project/` |
-| Validate agents | Check each agent has required sections |
-
-## Required Agent Sections
+### Required Agent Sections
 
 Every agent must include:
 
@@ -104,3 +202,16 @@ Every agent must include:
 5. **Quality Gates** - Checklists
 6. **Route To Other Agent** - When to hand off
 7. **Decision Authority** - Autonomous vs escalate
+
+---
+
+## Operations Documentation
+
+Standards and guides in `docs/operations/`:
+
+| Document | Purpose |
+|----------|---------|
+| `development-standards.md` | Code quality, testing, Git workflow |
+| `security-guidelines.md` | OWASP, secrets, authentication |
+| `documentation-guide.md` | Doc standards, token budgets |
+| `working-protocol.md` | Agent-First Protocol details |
