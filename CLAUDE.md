@@ -106,28 +106,32 @@ Agents route to each other based on expertise:
 
 ## Installation
 
-### One-Time Setup (Per Machine)
+### One-Prompt Setup
 
-```bash
-# Clone to global location
-mkdir -p ~/.claude
-cd ~/.claude
-git clone https://github.com/Everyone-Needs-A-Copilot/claude-copilot.git copilot
+After cloning, use these prompts to let Claude Code handle installation:
 
-# Build MCP servers
-cd copilot/mcp-servers/copilot-memory && npm install && npm run build
-cd ../skills-copilot && npm install && npm run build
+**Machine Setup (once per machine):**
+```
+Read @~/.claude/copilot/SETUP.md and set up Claude Copilot on this machine.
 ```
 
-### Per-Project Setup
+**Project Setup (each project):**
+```
+Read @~/.claude/copilot/SETUP.md and set up Claude Copilot in this project.
+```
 
-```bash
-# Copy MCP config template
-cp ~/.claude/copilot/templates/mcp.json ./.mcp.json
+See [SETUP.md](SETUP.md) for detailed step-by-step instructions.
 
-# Create CLAUDE.md from template
-cp ~/.claude/copilot/templates/CLAUDE.template.md ./CLAUDE.md
-# Edit CLAUDE.md with project-specific details
+### What Gets Created Per Project
+
+```
+your-project/
+├── .mcp.json              # MCP server configuration
+├── CLAUDE.md              # Project instructions
+└── .claude/
+    ├── commands/          # /protocol, /continue
+    ├── agents/            # 11 specialized agents
+    └── skills/            # Project-specific skills
 ```
 
 ---

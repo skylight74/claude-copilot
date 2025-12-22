@@ -4,9 +4,9 @@ This file provides guidance to Claude Code when working in this repository.
 
 ## Project Overview
 
-**Name:** [PROJECT_NAME]
-**Description:** [PROJECT_DESCRIPTION]
-**Stack:** [TECH_STACK]
+**Name:** {{PROJECT_NAME}}
+**Description:** {{PROJECT_DESCRIPTION}}
+**Stack:** {{TECH_STACK}}
 
 ---
 

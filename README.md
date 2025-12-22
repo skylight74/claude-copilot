@@ -387,11 +387,11 @@ Your CPA agent encodes tax law expertise, IRS requirements, and accounting stand
 
 ---
 
-### Option A: Claude Code-Assisted Installation (Recommended)
+### One-Prompt Setup
 
-Let Claude Code handle the setup for you.
+Claude Copilot is designed for single-prompt installation. Just clone the repo, then let Claude Code do the rest.
 
-**Step 1: Clone the repository**
+**Step 1: Clone the repository (one time)**
 
 ```bash
 mkdir -p ~/.claude
@@ -399,26 +399,41 @@ cd ~/.claude
 git clone https://github.com/Everyone-Needs-A-Copilot/claude-copilot.git copilot
 ```
 
-**Step 2: Ask Claude Code to complete the installation**
+**Step 2: Machine Setup (one time per machine)**
+
+Open Claude Code anywhere and paste:
+
+```
+Read @~/.claude/copilot/SETUP.md and set up Claude Copilot on this machine.
+```
+
+Claude Code will:
+- Check prerequisites (Node.js, build tools)
+- Build both MCP servers
+- Verify the installation
+
+**Step 3: Project Setup (each new project)**
 
 Open Claude Code in your project directory and paste:
 
 ```
-Read @~/.claude/copilot/README.md then:
-1. Build both MCP servers (npm install && npm run build for each)
-2. Copy templates to this project directory
-3. Verify the builds succeeded
+Read @~/.claude/copilot/SETUP.md and set up Claude Copilot in this project.
+```
 
-Tell me to restart Claude Code when done.
+Or specify a path:
+
+```
+Read @~/.claude/copilot/SETUP.md and set up Claude Copilot in /path/to/project
 ```
 
 Claude Code will:
-- Read the README for full context on the project structure
-- Run `npm install` and `npm run build` for both MCP servers
-- Copy `.mcp.json` and `CLAUDE.md` templates to your project
-- Report any issues and how to fix them
+- Create `.mcp.json` with correct paths
+- Create `CLAUDE.md` project instructions
+- Copy all commands (`/protocol`, `/continue`)
+- Copy all 11 specialized agents
+- Create `.claude/skills/` for project-specific skills
 
-**Step 3: Restart Claude Code and start working**
+**Step 4: Restart Claude Code and start working**
 
 ```bash
 /protocol    # Start fresh work with Agent-First Protocol
@@ -427,106 +442,57 @@ Claude Code will:
 
 ---
 
-### Option B: Manual Installation
+### What Gets Created
 
-For developers who prefer to run each step themselves.
+**Per Machine** (`~/.claude/copilot/`):
+- Built MCP servers (Memory Copilot, Skills Copilot)
+- Agent definitions and command templates
 
-```bash
-# 1. Clone to global location
-mkdir -p ~/.claude
-cd ~/.claude
-git clone https://github.com/Everyone-Needs-A-Copilot/claude-copilot.git copilot
-
-# 2. Build Memory Copilot
-cd copilot/mcp-servers/copilot-memory
-npm install
-npm run build
-
-# 3. Build Skills Copilot
-cd ../skills-copilot
-npm install
-npm run build
-
-# 4. Copy templates to your project
-cd /your/project
-cp ~/.claude/copilot/templates/mcp.json ./.mcp.json
-cp ~/.claude/copilot/templates/CLAUDE.template.md ./CLAUDE.md
-
-# 5. Restart Claude Code
+**Per Project**:
 ```
-
-**Verify installation:**
-
-```bash
-# Check MCP servers built successfully
-ls ~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js
-ls ~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js
-
-# Check templates copied
-ls .mcp.json CLAUDE.md
+your-project/
+├── .mcp.json              # MCP server configuration
+├── CLAUDE.md              # Project instructions
+└── .claude/
+    ├── commands/          # /protocol, /continue
+    ├── agents/            # 11 specialized agents
+    └── skills/            # Project-specific skills
 ```
 
 ---
 
 ### Verify Installation
 
-After restarting Claude Code, test that everything is working:
+After restarting Claude Code:
 
-**Step 1: Check MCP server status**
-
-Run `/mcp` in Claude Code. Both servers should show as connected:
-
+**1. Check MCP servers:** Run `/mcp`
 ```
 ● copilot-memory
 ● skills-copilot
 ```
 
-**Step 2: Test the Memory Copilot**
-
-Run `/continue` in Claude Code. You should see:
-
+**2. Test commands:** Run `/continue`
 ```
 [PROTOCOL: QUESTION | Agent: none | Action: ASKING]
 
 ## No Active Initiative Found
-
-There's no previous initiative to resume and no recent memories stored.
-
-**Options:**
-
-1. **Start a new initiative** - Tell me what you're working on...
-2. **Search for older context** - If you've worked on something before...
-
+...
 Protocol active. What would you like to work on?
 ```
-
-This confirms:
-- Memory Copilot MCP server is running
-- The `/continue` command is loaded
-- Agent-First Protocol is active
-
-**Step 3: Test the Skills Copilot**
-
-Ask Claude Code: "List available skills"
-
-You should see a response showing available skills from local and/or cached sources.
 
 **If something's wrong:**
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| MCP server shows "failed" | Tilde `~` not expanded in paths | Replace `~` with full path (e.g., `/Users/yourname/.claude/copilot/...`) |
-| `/continue` not found | Command not copied | Verify `.claude/commands/continue.md` exists |
-| `vec0 knn` errors | Old MCP server build | Rebuild: `cd ~/.claude/copilot/mcp-servers/copilot-memory && npm run build` |
+| MCP server shows "failed" | Tilde `~` not expanded in paths | Re-run project setup (it uses absolute paths) |
+| `/continue` not found | Commands not copied | Re-run project setup |
+| `vec0 knn` errors | Old MCP server build | Re-run machine setup |
 
 ---
 
-### Start Working
+### Manual Installation
 
-```bash
-/protocol    # Start fresh work with Agent-First Protocol
-/continue    # Resume where you left off
-```
+For developers who prefer to run each step themselves, see [SETUP.md](SETUP.md) for detailed instructions
 
 ---
 
