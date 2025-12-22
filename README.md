@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/copilot-co-logo.svg" alt="Claude Copilot" width="100">
+  <a href="https://ineedacopilot.com">
+    <img src="assets/copilot-co-logo.svg" alt="Claude Copilot" width="100">
+  </a>
 </p>
 
 <h1 align="center">Claude Copilot</h1>
@@ -9,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://ineedacopilot.com"><img src="https://img.shields.io/badge/Website-ineedacopilot.com-blue" alt="Website"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://github.com/Everyone-Needs-A-Copilot/claude-copilot"><img src="https://img.shields.io/github/stars/Everyone-Needs-A-Copilot/claude-copilot?style=social" alt="GitHub stars"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js" alt="Node.js"></a>
@@ -784,9 +787,11 @@ MIT License - see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  <img src="assets/ENAC-Tagline-MID.svg" alt="...because Everyone Needs a Copilot" width="400">
+  <a href="https://ineedacopilot.com">
+    <img src="assets/ENAC-Tagline-MID.svg" alt="...because Everyone Needs a Copilot" width="400">
+  </a>
 </p>
 
 <p align="center">
-  Built by <a href="https://github.com/Everyone-Needs-A-Copilot">Everyone Needs a Copilot</a>
+  Built by <a href="https://ineedacopilot.com">Everyone Needs a Copilot</a>
 </p>
