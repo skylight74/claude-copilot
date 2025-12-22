@@ -915,8 +915,7 @@ MIT License - see [LICENSE](LICENSE)
 
 - [Architecture Documentation](docs/ARCHITECTURE.md)
 - [Extension Specification](docs/EXTENSION-SPEC.md)
-- [Development Standards](docs/operations/development-standards.md)
-- [Security Guidelines](docs/operations/security-guidelines.md)
+- [Working Protocol](docs/operations/working-protocol.md)
 
 ---
 

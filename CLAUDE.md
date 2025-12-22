@@ -248,7 +248,5 @@ Standards and guides in `docs/operations/`:
 
 | Document | Purpose |
 |----------|---------|
-| `development-standards.md` | Code quality, testing, Git workflow |
-| `security-guidelines.md` | OWASP, secrets, authentication |
-| `documentation-guide.md` | Doc standards, token budgets |
 | `working-protocol.md` | Agent-First Protocol details |
+| `documentation-guide.md` | Doc standards, token budgets |
