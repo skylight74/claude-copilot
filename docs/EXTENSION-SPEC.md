@@ -350,15 +350,16 @@ Extensions are validated against framework version at setup time.
 
 Add `KNOWLEDGE_REPO_PATH` to your skills-copilot MCP server configuration:
 
+> **Important:** Replace `/Users/yourname` with your actual home directory path. The `~` tilde does **NOT** expand in MCP args.
+
 ```json
 {
   "mcpServers": {
     "skills-copilot": {
       "command": "node",
-      "args": ["~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
+      "args": ["/Users/yourname/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
       "env": {
-        "LOG_LEVEL": "info",
-        "LOCAL_SKILLS_PATH": "~/.claude/copilot/templates/skills",
+        "LOCAL_SKILLS_PATH": "./.claude/skills",
         "KNOWLEDGE_REPO_PATH": "/path/to/your/knowledge-repo"
       }
     }
