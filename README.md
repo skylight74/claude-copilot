@@ -1,17 +1,51 @@
-# Claude Copilot
+<p align="center">
+  <img src="assets/copilot-co-logo.svg" alt="Claude Copilot" width="100">
+</p>
 
-**A complete AI development framework that gives every developer access to a full team of specialists.**
+<h1 align="center">Claude Copilot</h1>
+
+<p align="center">
+  <strong>A complete AI development framework that gives every developer access to a full team of specialists.</strong>
+</p>
+
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://github.com/Everyone-Needs-A-Copilot/claude-copilot"><img src="https://img.shields.io/github/stars/Everyone-Needs-A-Copilot/claude-copilot?style=social" alt="GitHub stars"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js" alt="Node.js"></a>
+  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/Claude_Code-Compatible-7C3AED" alt="Claude Code"></a>
+</p>
 
 ---
 
 ## The Problem
+
+### For Solo Developers
 
 Building software alone is hard. You're expected to be an expert in architecture, security, testing, UX, accessibility, DevOps, and more—all at once. AI assistants help, but they:
 
 - **Forget everything** between sessions (wasted tokens rebuilding context)
 - **Give generic advice** (no specialized expertise for complex decisions)
 - **Lack process** (ad-hoc responses instead of proven workflows)
-- **Can't grow** (no way to add your team's knowledge and standards)
+
+### For Teams
+
+Working on a team is just as hard. You're expected to share knowledge, align on standards, and think consistently—but reality looks different:
+
+- **Knowledge stays siloed** — What one engineer learns doesn't transfer to others
+- **Standards exist but aren't followed** — Documentation sits in wikis nobody reads
+- **Onboarding takes months** — New hires slowly absorb "how we do things here" through osmosis
+- **Institutional knowledge walks out the door** — When people leave, their expertise leaves with them
+- **AI amplifies inconsistency** — Everyone prompts differently, gets different quality, makes different mistakes
+- **No compound learning** — The team makes the same mistakes repeatedly because lessons aren't encoded anywhere
+
+### The Strategic Gap
+
+Even when teams overcome these challenges, a bigger problem remains:
+
+- **Engineers build what's specified, not what's needed** — No one advocates for the user during implementation
+- **Design and development speak different languages** — Intent gets lost in translation
+- **Security, accessibility, and quality are afterthoughts** — Bolted on at the end instead of built in from the start
+- **AI tools optimize locally, not globally** — They help with the task at hand but miss the bigger picture
 
 ## The Solution
 
@@ -22,7 +56,7 @@ Claude Copilot transforms Claude Code into a **complete development environment*
 | Lost context | **Memory Copilot** persists decisions, lessons, and progress | Pick up exactly where you left off |
 | Generic advice | **11 Specialized Agents** with deep domain expertise | Expert guidance for every task type |
 | No process | **Protocol Commands** enforce proven workflows | Consistent quality, nothing missed |
-| Can't customize | **Skills + Extensions** add your team's knowledge | Your standards, your way |
+| One-size-fits-all | **Your Knowledge, Encoded** — override agents, add private skills, define your methodologies | Your team's standards, applied everywhere |
 
 ---
 
@@ -70,6 +104,32 @@ Claude Copilot transforms Claude Code into a **complete development environment*
 │  • Enables /continue         │   │  • Intelligent caching                  │
 └──────────────────────────────┘   └──────────────────────────────────────────┘
 ```
+
+---
+
+## Works Alone, Grows With Teams
+
+Claude Copilot delivers value immediately—but its true power emerges when teams customize it.
+
+| Level | Who | What You Get |
+|-------|-----|--------------|
+| **Solo Developer** | Anyone, day one | 11 expert agents, persistent memory, 25K+ public skills |
+| **Team** | Engineering orgs | Override agents with your methodologies, share private skills |
+| **Enterprise** | Companies | Proprietary knowledge repositories, custom domain agents |
+
+### What Teams Can Customize
+
+| Customization | Example | Benefit |
+|---------------|---------|---------|
+| **Override agents** | Replace generic architecture patterns with yours | Your standards enforced automatically |
+| **Add new agents** | Create specialists for compliance, analytics, your domain | Expertise that doesn't exist elsewhere |
+| **Private skills** | Encode API patterns, security requirements, design systems | Institutional knowledge that persists |
+| **Knowledge repositories** | Full control over extensions and methodologies | Complete ownership of your team's AI |
+
+Your React patterns. Your API standards. Your security requirements. Your design system.
+All encoded once, applied everywhere, by every team member.
+
+→ See [Making It Yours](#making-it-yours) for implementation details.
 
 ---
 
@@ -239,7 +299,9 @@ These agents ensure your software serves real human needs—not just technical r
 
 ## Agent Collaboration
 
-Agents don't work in isolation—they route to each other based on expertise:
+Agents don't work in isolation—they route to each other based on expertise.
+
+### Technical Flow
 
 ```
 User Request: "Add user authentication"
@@ -258,6 +320,50 @@ User Request: "Add user authentication"
                    │
                    └──→ @agent-doc (documentation)
 ```
+
+### Human Advocate Flow
+
+```
+User Request: "Redesign our onboarding experience"
+         │
+         ▼
+    @agent-sd ─────────────────────────────────────────────────────┐
+    (maps customer journey, identifies pain points)                 │
+         │                                                          │
+         ├──→ @agent-uxd (designs task flows, wireframes)          │
+         │         │                                                │
+         │         └──→ @agent-uids (visual design, tokens)        │
+         │                   │                                      │
+         │                   └──→ @agent-cw (onboarding copy)      │
+         │                                                          │
+         └──→ @agent-uid (implements components) ◄─────────────────┘
+                   │
+                   └──→ @agent-qa (accessibility testing)
+```
+
+### Custom Agent Flow
+
+Teams can add domain-specific agents. Here's an example with a custom `@agent-cpa`:
+
+```
+User Request: "Add expense reporting with tax categorization"
+         │
+         ▼
+    @agent-ta ──────────────────────────────────────────────┐
+    (designs data model, API structure)                      │
+         │                                                   │
+         ├──→ @agent-cpa (tax categories, compliance rules) │  ← Your custom agent
+         │         │                                         │
+         │         └──→ returns IRS category mappings        │
+         │                                                   │
+         └──→ @agent-me (implementation) ◄──────────────────┘
+                   │
+                   ├──→ @agent-sec (financial data protection)
+                   │
+                   └──→ @agent-cpa (validates tax logic)     ← Called again for review
+```
+
+Your CPA agent encodes tax law expertise, IRS requirements, and accounting standards—knowledge that doesn't exist in generic AI tools.
 
 ---
 
@@ -435,22 +541,59 @@ skill_save({
 
 ---
 
-## Extending Claude Copilot
+## Making It Yours
+
+The base framework works immediately. These customizations let teams encode their own standards.
+
+### Three Ways to Customize
+
+| Method | Effort | Best For |
+|--------|--------|----------|
+| **Private Skills** | Low | Encoding patterns, standards, checklists |
+| **Agent Extensions** | Medium | Adding to existing agent capabilities |
+| **Agent Overrides** | High | Replacing methodologies entirely |
+
+### Quick Start: Private Skills
+
+The fastest way to customize. No code changes required.
+
+```javascript
+// Save a skill via Skills Copilot
+skill_save({
+  name: "our-api-standards",
+  description: "REST API design standards for our team",
+  content: "Your standards in markdown...",
+  keywords: ["api", "rest", "standards"],
+  isProprietary: true
+})
+```
+
+Now any agent can load `our-api-standards` when working on APIs.
 
 ### Knowledge Repositories
 
-Claude Copilot works standalone with industry-standard methodologies. Teams can extend it with **knowledge repositories** containing proprietary methods.
+For deeper customization, create a knowledge repository:
+
+```
+your-knowledge-repo/
+├── knowledge-manifest.json    # Declares what you're customizing
+├── extensions/
+│   ├── ta.md                  # Override Tech Architect methodology
+│   └── sec.md                 # Extend Security agent
+└── skills/
+    └── your-skills.md         # Additional skills
+```
 
 ```
 ┌────────────────────────────────────────┐
 │  Claude Copilot (Base Framework)       │
-│  Generic, industry-standard methods    │
+│  Industry-standard methodologies       │
 │  Works for any developer               │
 └────────────────────────────────────────┘
                     │
-                    ▼ extends
+                    ▼ your customizations extend
 ┌────────────────────────────────────────┐
-│  Your Knowledge Repo (Optional)        │
+│  Your Knowledge Repository             │
 │  Company-specific methodologies        │
 │  Proprietary skills & standards        │
 └────────────────────────────────────────┘
@@ -458,13 +601,13 @@ Claude Copilot works standalone with industry-standard methodologies. Teams can 
 
 ### Extension Types
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| **Override** | Replace base methodology | Your company's architecture standards instead of generic ones |
-| **Extension** | Add to base methodology | Additional security checks for your industry |
-| **Skills** | Add capabilities | Your proprietary analysis frameworks |
+| Type | Behavior | Use Case |
+|------|----------|----------|
+| **Override** | Replaces base agent entirely | Your architecture methodology is fundamentally different |
+| **Extension** | Adds sections to base agent | Add industry-specific security checks |
+| **Skills** | Injects skills into agent context | Agent automatically loads your patterns |
 
-See [docs/EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for the complete specification.
+See [docs/EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for complete implementation details.
 
 ---
 
@@ -561,6 +704,12 @@ Your context shouldn't evaporate between sessions. Decisions, lessons, and progr
 
 Load specialized knowledge when you need it, not as bloated context at the start of every session. 25,000+ skills available, each loaded only when relevant.
 
+### Your Standards, Not Ours
+
+Claude Copilot ships with industry-standard methodologies—but your team isn't generic. Override any agent with your architecture standards. Add skills encoding your API patterns. Non-developers can contribute too: your UX team's research methods, your content team's voice guidelines, your security team's compliance requirements.
+
+The framework adapts to you. Not the other way around.
+
 ---
 
 ## Requirements
@@ -634,4 +783,10 @@ MIT License - see [LICENSE](LICENSE)
 
 ---
 
-Built by [Everyone Needs a Copilot](https://github.com/Everyone-Needs-A-Copilot)
+<p align="center">
+  <img src="assets/ENAC-Tagline-MID.svg" alt="...because Everyone Needs a Copilot" width="400">
+</p>
+
+<p align="center">
+  Built by <a href="https://github.com/Everyone-Needs-A-Copilot">Everyone Needs a Copilot</a>
+</p>
