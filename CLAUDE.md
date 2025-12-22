@@ -125,22 +125,50 @@ cp ~/.claude/copilot/templates/CLAUDE.template.md ./CLAUDE.md
 
 ## Extension System
 
-This framework supports extensions via knowledge repositories.
+This framework supports extensions via knowledge repositories. Extensions allow company-specific methodologies to override or enhance base agents.
 
 ### Extension Types
 
 | Type | Behavior |
 |------|----------|
-| `override` | Replaces base agent |
-| `extension` | Adds to base agent |
-| `skills` | Injects additional skills |
+| `override` | Replaces base agent entirely |
+| `extension` | Adds to base agent (section-level merge) |
+| `skills` | Injects additional skills into agent |
 
-### Detecting Extensions
+### Configuring a Knowledge Repository
 
-Check for `knowledge-manifest.json` in:
-- Project root
-- `docs/shared/`
-- Parent directories
+1. **Set `KNOWLEDGE_REPO_PATH`** in your MCP config (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "skills-copilot": {
+      "env": {
+        "KNOWLEDGE_REPO_PATH": "/path/to/your/knowledge-repo"
+      }
+    }
+  }
+}
+```
+
+2. **Knowledge repo must contain** `knowledge-manifest.json` declaring extensions
+3. **Restart Claude Code** to pick up changes
+
+### Extension Tools
+
+| Tool | Purpose |
+|------|---------|
+| `extension_get` | Get extension for specific agent |
+| `extension_list` | List all available extensions |
+| `manifest_status` | Check knowledge repo configuration |
+
+### Documentation
+
+See [EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for full documentation on:
+- Creating knowledge repositories
+- Extension file formats
+- Fallback behaviors
+- Required skills validation
 
 ---
 

@@ -63,6 +63,9 @@ CACHE_PATH=~/.claude/skills-cache
 CACHE_TTL_DAYS=7
 LOCAL_SKILLS_PATH=./03-ai-enabling/01-skills
 LOG_LEVEL=info
+
+# Knowledge repository for agent extensions (optional)
+KNOWLEDGE_REPO_PATH=/path/to/your/knowledge-repo
 ```
 
 ### 4. Set up database (for private skills)
@@ -102,6 +105,8 @@ Changes take effect after restarting.
 
 ## Tools
 
+### Skill Tools
+
 | Tool | Description |
 |------|-------------|
 | `skill_get` | Fetch skill by name from best available source |
@@ -110,6 +115,14 @@ Changes take effect after restarting.
 | `skill_save` | Save skill to private database |
 | `skill_cache_clear` | Clear cache (all or specific skill) |
 | `skills_hub_status` | Check provider status |
+
+### Extension Tools
+
+| Tool | Description |
+|------|-------------|
+| `extension_get` | Get agent extension from knowledge repository |
+| `extension_list` | List all available agent extensions |
+| `manifest_status` | Check knowledge repository configuration |
 
 ## Usage Examples
 
@@ -149,6 +162,47 @@ skills_hub_status()
 ```
 
 Returns provider connection status and cache stats.
+
+## Knowledge Repository Extensions
+
+Knowledge repositories can extend base agents with company-specific methodologies. Configure via `KNOWLEDGE_REPO_PATH` environment variable.
+
+### Get extension for an agent
+
+```
+extension_get({ agent: "sd" })
+```
+
+Returns the extension content (override, extension, or skills injection).
+
+### List available extensions
+
+```
+extension_list()
+```
+
+Returns all extensions defined in the knowledge repository manifest.
+
+### Check configuration
+
+```
+manifest_status()
+```
+
+Returns:
+```json
+{
+  "configured": true,
+  "path": "/path/to/knowledge-repo",
+  "manifest": {
+    "name": "company-knowledge",
+    "extensions": 4,
+    "skills": 5
+  }
+}
+```
+
+See [EXTENSION-SPEC.md](/docs/EXTENSION-SPEC.md) for full documentation on creating knowledge repositories.
 
 ## Skills Registry (CLAUDE.md)
 
