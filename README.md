@@ -101,7 +101,7 @@ Claude Copilot transforms Claude Code into a **complete development environment*
 ┌──────────────────────────────┐   ┌──────────────────────────────────────────┐
 │      MEMORY COPILOT          │   │           SKILLS COPILOT                  │
 │                              │   │                                          │
-│  • Stores decisions made     │   │  • 25,000+ public skills (SkillsMP)     │
+│  • Stores decisions made     │   │  • 25,000+ public skills (Skill Marketplace) │
 │  • Remembers lessons learned │   │  • Your private/proprietary skills      │
 │  • Tracks progress           │   │  • Local project skills                 │
 │  • Enables /continue         │   │  • Intelligent caching                  │
@@ -474,23 +474,31 @@ For access to 25,000+ public skills and team-shared private skills:
 
 ## External Services Setup
 
-### SkillsMP (Public Skills)
+### Skill Marketplace (SkillsMP)
 
-SkillsMP provides access to **25,000+ curated public skills** for frameworks, languages, and best practices.
+[Skill Marketplace](https://skillsmp.com) is a platform for discovering, sharing, and managing AI skills. Think of it as an "app store" for AI capabilities—curated prompts, workflows, and domain expertise packaged as reusable skills that any AI agent can load on demand.
+
+**What Skill Marketplace provides:**
+- **25,000+ public skills** for frameworks, languages, and best practices
+- **Community-curated content** maintained by developers and domain experts
+- **Semantic search** to find the right skill for any task
+- **Version management** so skills improve over time
+- **Private repositories** for teams to share proprietary skills
 
 **To get your API key:**
 
-1. Visit [skillsmp.com](https://skillsmp.com) (or your organization's SkillsMP instance)
+1. Visit [skillsmp.com](https://skillsmp.com)
 2. Create an account or sign in
 3. Navigate to Settings → API Keys
 4. Generate a new API key
 5. Add to your `.mcp.json` as `SKILLSMP_API_KEY`
 
-**What you get:**
-- Skills for popular frameworks (React, Next.js, Laravel, Rails, etc.)
-- Language-specific patterns and best practices
-- Community-curated and maintained content
-- Regular updates as frameworks evolve
+**Example skills available:**
+- Framework patterns (React, Next.js, Laravel, Rails, Django, etc.)
+- Language idioms and best practices
+- Security checklists and compliance guides
+- Design system implementations
+- API design standards
 
 ### PostgreSQL (Private/Team Skills)
 
@@ -723,7 +731,7 @@ The framework adapts to you. Not the other way around.
 | Claude Code CLI | Yes | - |
 | Build tools | Yes | - |
 | ~300MB disk space | Yes | - |
-| SkillsMP API key | No | Enables 25K+ public skills |
+| Skill Marketplace API key | No | Enables 25K+ public skills |
 | PostgreSQL | No | Enables team-shared private skills |
 | Internet connection | No | Only for external skills |
 
