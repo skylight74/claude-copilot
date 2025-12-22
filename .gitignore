@@ -37,3 +37,13 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Security - Never commit these
+.mcp.json
+migrate.sh
+*.pem
+*.key
+*credentials*
+*secret*
+.env*
+!.env.example
