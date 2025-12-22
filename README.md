@@ -401,18 +401,19 @@ git clone https://github.com/Everyone-Needs-A-Copilot/claude-copilot.git copilot
 
 **Step 2: Ask Claude Code to complete the installation**
 
-Open Claude Code in your terminal and paste:
+Open Claude Code in your project directory and paste:
 
 ```
-I just cloned claude-copilot to ~/.claude/copilot. Please:
-1. Build both MCP servers (copilot-memory and skills-copilot)
-2. Copy the templates to my current project directory
-3. Verify everything is working
+Read @~/.claude/copilot/README.md then:
+1. Build both MCP servers (npm install && npm run build for each)
+2. Copy templates to this project directory
+3. Verify the builds succeeded
 
-Then restart Claude Code when done.
+Tell me to restart Claude Code when done.
 ```
 
 Claude Code will:
+- Read the README for full context on the project structure
 - Run `npm install` and `npm run build` for both MCP servers
 - Copy `.mcp.json` and `CLAUDE.md` templates to your project
 - Report any issues and how to fix them
