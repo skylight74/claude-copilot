@@ -375,26 +375,157 @@ This is optional but recommended for teams.
 
 If both machine and project are already set up, run verification:
 
+### Step 1: Check MCP Servers
+
 ```bash
-# Check MCP servers
-ls ~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js
-ls ~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js
-
-# Check project files
-ls .mcp.json
-ls CLAUDE.md
-ls .claude/commands/protocol.md
-ls .claude/agents/ta.md
-
-# Check knowledge
-ls ~/.claude/knowledge/knowledge-manifest.json 2>/dev/null
+ls ~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js 2>/dev/null && echo "MEMORY_OK" || echo "MEMORY_MISSING"
+ls ~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js 2>/dev/null && echo "SKILLS_OK" || echo "SKILLS_MISSING"
 ```
 
-Report status of each component.
+### Step 2: Check Project Files
+
+```bash
+ls .mcp.json 2>/dev/null && echo "MCP_JSON_OK" || echo "MCP_JSON_MISSING"
+ls CLAUDE.md 2>/dev/null && echo "CLAUDE_MD_OK" || echo "CLAUDE_MD_MISSING"
+```
+
+### Step 3: Check for Broken Symlinks
+
+**CRITICAL:** Regular `ls` passes for broken symlinks. Must check if target exists.
+
+```bash
+echo "=== Checking commands for broken symlinks ==="
+for f in .claude/commands/*.md 2>/dev/null; do
+  if [ -L "$f" ] && [ ! -e "$f" ]; then
+    echo "BROKEN_SYMLINK: $f"
+  fi
+done
+
+echo "=== Checking agents for broken symlinks ==="
+for f in .claude/agents/*.md 2>/dev/null; do
+  if [ -L "$f" ] && [ ! -e "$f" ]; then
+    echo "BROKEN_SYMLINK: $f"
+  fi
+done
+
+echo "=== Done ==="
+```
+
+- `-L "$f"` = file is a symlink
+- `! -e "$f"` = target doesn't exist
+
+**If any BROKEN_SYMLINK found:** Run **Repair Mode** below.
+
+### Step 4: Check Knowledge
+
+```bash
+ls ~/.claude/knowledge/knowledge-manifest.json 2>/dev/null && echo "KNOWLEDGE_OK" || echo "NO_KNOWLEDGE"
+```
+
+### Step 5: Report Status
+
+Report status of each component. If all OK, setup is complete.
+
+---
+
+## Repair Mode
+
+When broken symlinks are detected, run this repair process.
+
+**Show this message:**
+
+---
+
+⚠️ **Found broken symlinks in `.claude/commands/` or `.claude/agents/`**
+
+This usually happens when:
+- Project used symlinks to a shared directory that was deleted
+- Files were moved or renamed
+- Setup originally used symlinks instead of copies
+
+I'll remove the broken symlinks and copy fresh files from `~/.claude/copilot/`.
+
+---
+
+### Step 1: Remove Broken Symlinks and Old Files
+
+```bash
+# Remove all files in commands (broken symlinks + any others)
+rm -f .claude/commands/*.md 2>/dev/null
+
+# Remove all files in agents (broken symlinks + any others)
+rm -f .claude/agents/*.md 2>/dev/null
+
+echo "Removed old files"
+```
+
+### Step 2: Copy Fresh Files
+
+```bash
+# Copy commands from source
+cp ~/.claude/copilot/.claude/commands/*.md .claude/commands/
+
+# Copy agents from source
+cp ~/.claude/copilot/.claude/agents/*.md .claude/agents/
+
+echo "Copied fresh files"
+```
+
+### Step 3: Verify Repair
+
+```bash
+# Verify commands exist and are regular files (not symlinks)
+echo "=== Commands ==="
+ls -la .claude/commands/*.md | head -5
+
+echo "=== Agents ==="
+ls -la .claude/agents/*.md | head -5
+
+# Count files
+echo "Commands: $(ls .claude/commands/*.md 2>/dev/null | wc -l | tr -d ' ') files"
+echo "Agents: $(ls .claude/agents/*.md 2>/dev/null | wc -l | tr -d ' ') files"
+```
+
+### Step 4: Report Success
+
+---
+
+**Repair Complete!**
+
+- Removed broken symlinks
+- Copied fresh commands from `~/.claude/copilot/.claude/commands/`
+- Copied fresh agents from `~/.claude/copilot/.claude/agents/`
+
+Your `/protocol`, `/continue`, and other commands should now work.
+
+**Tip:** If you want to update these files in the future, run `/setup` again to get the latest versions from Claude Copilot.
+
+---
 
 ---
 
 ## Troubleshooting
+
+### Broken Symlinks (Commands Not Working)
+
+**Symptoms:**
+- `/protocol` or `/continue` not found
+- Error: "No such file or directory"
+- `ls` shows files but they don't work
+
+**Cause:** Project was set up with symlinks to a directory that was later deleted or moved.
+
+**Detection:**
+```bash
+# Check for broken symlinks
+for f in .claude/commands/*.md .claude/agents/*.md 2>/dev/null; do
+  if [ -L "$f" ] && [ ! -e "$f" ]; then
+    echo "BROKEN: $f"
+  fi
+done
+```
+
+**Fix:** Run `/setup` - it will detect broken symlinks and offer to repair them.
 
 ### Build Fails
 
