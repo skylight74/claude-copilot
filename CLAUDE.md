@@ -43,7 +43,7 @@ MCP server providing persistent memory across sessions.
 
 ### 2. Agents
 
-11 specialized agents for complex development tasks.
+12 specialized agents for complex development tasks.
 
 **Location:** `.claude/agents/`
 
@@ -60,6 +60,7 @@ MCP server providing persistent memory across sessions.
 | `uids` | UI Designer | Visual design |
 | `uid` | UI Developer | UI implementation |
 | `cw` | Copywriter | Content/copy |
+| `kc` | Knowledge Copilot | Shared knowledge setup |
 
 ### 3. Skills Copilot
 
@@ -95,6 +96,8 @@ Commands enforcing battle-tested workflows.
 |---------|---------|
 | `/protocol` | Start fresh work with Agent-First Protocol |
 | `/continue` | Resume previous work via Memory Copilot |
+| `/setup` | Configure Claude Copilot (machine or project) |
+| `/knowledge-copilot` | Build or link shared knowledge repository |
 
 ---
 
@@ -117,21 +120,24 @@ Agents route to each other based on expertise:
 
 ## Installation
 
-### One-Prompt Setup
+### One-Command Setup
 
-After cloning, use these prompts to let Claude Code handle installation:
+After cloning, use `/setup` to handle installation:
 
 **Machine Setup (once per machine):**
+```bash
+cd ~/.claude/copilot
+claude
 ```
-Read @~/.claude/copilot/SETUP.md and set up Claude Copilot on this machine.
-```
+Then run `/setup`
 
 **Project Setup (each project):**
-```
-Read @~/.claude/copilot/SETUP.md and set up Claude Copilot in this project.
-```
+Open Claude Code in your project and run `/setup`
 
-See [SETUP.md](SETUP.md) for detailed step-by-step instructions.
+**Knowledge Setup (optional):**
+Run `/knowledge-copilot` to create a shared knowledge repository
+
+See [SETUP.md](SETUP.md) for manual setup instructions.
 
 ### What Gets Created Per Project
 
@@ -140,8 +146,8 @@ your-project/
 ├── .mcp.json              # MCP server configuration
 ├── CLAUDE.md              # Project instructions
 └── .claude/
-    ├── commands/          # /protocol, /continue
-    ├── agents/            # 11 specialized agents
+    ├── commands/          # /protocol, /continue, /setup, /knowledge-copilot
+    ├── agents/            # 12 specialized agents
     └── skills/            # Project-specific skills
 ```
 
