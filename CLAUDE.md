@@ -92,12 +92,14 @@ Commands enforcing battle-tested workflows.
 
 **Location:** `.claude/commands/`
 
-| Command | Purpose |
-|---------|---------|
-| `/protocol` | Start fresh work with Agent-First Protocol |
-| `/continue` | Resume previous work via Memory Copilot |
-| `/setup` | Configure Claude Copilot (machine or project) |
-| `/knowledge-copilot` | Build or link shared knowledge repository |
+| Command | Level | Purpose |
+|---------|-------|---------|
+| `/setup` | Machine | One-time machine setup (run from `~/.claude/copilot`) |
+| `/setup-project` | User | Initialize a new project |
+| `/update-project` | User | Update existing project with latest Claude Copilot |
+| `/knowledge-copilot` | User | Build or link shared knowledge repository |
+| `/protocol` | Project | Start fresh work with Agent-First Protocol |
+| `/continue` | Project | Resume previous work via Memory Copilot |
 
 ---
 
@@ -120,21 +122,22 @@ Agents route to each other based on expertise:
 
 ## Installation
 
-### One-Command Setup
+### Setup Flow
 
-After cloning, use `/setup` to handle installation:
-
-**Machine Setup (once per machine):**
+**1. Machine Setup (once per machine):**
 ```bash
 cd ~/.claude/copilot
 claude
 ```
 Then run `/setup`
 
-**Project Setup (each project):**
-Open Claude Code in your project and run `/setup`
+**2. Project Setup (each project):**
+Open Claude Code in your project and run `/setup-project`
 
-**Knowledge Setup (optional):**
+**3. Update Projects (after updating Claude Copilot):**
+Run `/update-project` in each project
+
+**4. Knowledge Setup (optional):**
 Run `/knowledge-copilot` to create a shared knowledge repository
 
 See [SETUP.md](SETUP.md) for manual setup instructions.
@@ -146,7 +149,7 @@ your-project/
 ├── .mcp.json              # MCP server configuration
 ├── CLAUDE.md              # Project instructions
 └── .claude/
-    ├── commands/          # /protocol, /continue, /setup, /knowledge-copilot
+    ├── commands/          # /protocol, /continue
     ├── agents/            # 12 specialized agents
     └── skills/            # Project-specific skills
 ```

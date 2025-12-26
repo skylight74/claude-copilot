@@ -17,7 +17,7 @@ cd ~/.claude/copilot
 claude
 ```
 
-### Step 3: Run Setup
+### Step 3: Run Machine Setup
 
 ```
 /setup
@@ -26,24 +26,44 @@ claude
 The setup wizard will:
 - Check prerequisites (Node.js, build tools)
 - Build the MCP servers
-- Install global commands (`/setup` and `/knowledge-copilot` work anywhere)
-- Guide you through configuration
+- Install global commands (`/setup-project`, `/update-project`, `/knowledge-copilot`)
 
 ### Step 4: Set Up Projects
 
 Open Claude Code in any project and run:
 
 ```
-/setup
+/setup-project
 ```
 
-### Step 5: (Optional) Set Up Shared Knowledge
+### Step 5: Update Projects (When Needed)
+
+After updating Claude Copilot, refresh your projects:
+
+```
+/update-project
+```
+
+### Step 6: (Optional) Set Up Shared Knowledge
 
 ```
 /knowledge-copilot
 ```
 
 This creates a knowledge repository for company/product information that's shared across all projects.
+
+---
+
+## Commands Overview
+
+| Command | Where It Works | Purpose |
+|---------|----------------|---------|
+| `/setup` | `~/.claude/copilot` only | One-time machine setup |
+| `/setup-project` | Any folder | Initialize a new project |
+| `/update-project` | Existing projects | Update project with latest Claude Copilot |
+| `/knowledge-copilot` | Any folder | Set up shared knowledge |
+| `/protocol` | Projects | Start fresh work |
+| `/continue` | Projects | Resume previous work |
 
 ---
 
@@ -56,15 +76,16 @@ This creates a knowledge repository for company/product information that's share
 | `mcp-servers/copilot-memory/` | Persistent memory across sessions |
 | `mcp-servers/skills-copilot/` | On-demand skill loading + knowledge search |
 | `.claude/agents/` | 12 specialized agent definitions |
-| `.claude/commands/` | Slash commands |
+| `.claude/commands/` | Source command files |
 | `templates/` | Project setup templates |
 
 ### User Level (`~/.claude/commands/`)
 
 | Component | Purpose |
 |-----------|---------|
-| `setup.md` | `/setup` command - works in any folder |
-| `knowledge-copilot.md` | `/knowledge-copilot` command - works in any folder |
+| `setup-project.md` | `/setup-project` - initialize new projects |
+| `update-project.md` | `/update-project` - update existing projects |
+| `knowledge-copilot.md` | `/knowledge-copilot` - set up shared knowledge |
 
 ### Project Level
 
@@ -72,7 +93,7 @@ This creates a knowledge repository for company/product information that's share
 |----------------|---------|
 | `.mcp.json` | MCP server configuration |
 | `CLAUDE.md` | Project-specific instructions |
-| `.claude/commands/` | Slash commands (/protocol, /continue) |
+| `.claude/commands/` | Project commands (`/protocol`, `/continue`) |
 | `.claude/agents/` | Agent definitions |
 | `.claude/skills/` | Project-specific skills |
 
@@ -115,6 +136,15 @@ npm install
 npm run build
 ```
 
+### Install Global Commands
+
+```bash
+mkdir -p ~/.claude/commands
+cp ~/.claude/copilot/.claude/commands/setup-project.md ~/.claude/commands/
+cp ~/.claude/copilot/.claude/commands/update-project.md ~/.claude/commands/
+cp ~/.claude/copilot/.claude/commands/knowledge-copilot.md ~/.claude/commands/
+```
+
 ### Project Setup
 
 1. Create directories:
@@ -122,9 +152,10 @@ npm run build
    mkdir -p .claude/commands .claude/agents .claude/skills
    ```
 
-2. Copy commands and agents:
+2. Copy project commands and agents:
    ```bash
-   cp ~/.claude/copilot/.claude/commands/*.md .claude/commands/
+   cp ~/.claude/copilot/.claude/commands/protocol.md .claude/commands/
+   cp ~/.claude/copilot/.claude/commands/continue.md .claude/commands/
    cp ~/.claude/copilot/.claude/agents/*.md .claude/agents/
    ```
 
@@ -191,7 +222,8 @@ npm run build
 
 ### Commands Not Found
 
-Verify `.claude/commands/` contains `protocol.md` and `continue.md`
+- For `/setup-project` or `/update-project`: Run machine setup first
+- For `/protocol` or `/continue`: Run `/setup-project` in your project
 
 ---
 
