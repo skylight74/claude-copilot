@@ -73,4 +73,7 @@ This project uses [Claude Copilot](https://github.com/Everyone-Needs-A-Copilot/c
 
 ## Project-Specific Rules
 
+### No Time Estimates
+All plans, roadmaps, and task breakdowns MUST omit time estimates. Use phases, priorities, complexity ratings, and dependencies instead of dates or durations. See `~/.claude/copilot/CLAUDE.md` for full policy.
+
 {{PROJECT_RULES}}

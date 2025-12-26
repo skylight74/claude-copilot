@@ -279,6 +279,36 @@ Call `initiative_update` with:
 
 ## Development Guidelines
 
+### No Time Estimates Policy
+
+**ALL outputs from agents and direct responses MUST NEVER include:**
+
+- Time-based estimates (hours, days, weeks, months, quarters, sprints)
+- Completion dates or deadlines
+- Duration predictions or timelines
+- Phase durations (e.g., "Phase 1 (Weeks 1-2)")
+
+**Acceptable alternatives:**
+
+| Instead of | Use |
+|------------|-----|
+| "Phase 1 (weeks 1-2)" | "Phase 1: Foundation" |
+| "Estimated: 3 days" | "Complexity: Medium" |
+| "Sprint 1-3" | "Priority: P0, P1, P2" |
+| "Will take 2 hours" | "Task: [description]" |
+| "Response time: < 1 hour" | "Severity: Critical (immediate response)" |
+| "Q1 delivery" | "After Phase 2 completes" |
+
+**Sequencing without time:**
+- Use dependency chains: "After X completes" not "Week 2"
+- Use phases: "Phase 1 → Phase 2" not "Weeks 1-3"
+- Use priority: "P0 (critical), P1 (high), P2 (medium)" not "This week"
+- Use complexity: "Low / Medium / High / Very High" not "X days"
+
+**Why:** Time estimates are consistently inaccurate, create false expectations, and shift focus from quality to arbitrary deadlines. With parallel agents, traditional time-based planning is meaningless.
+
+---
+
 ### When Modifying Agents
 
 - Keep base agents generic (no company-specific content)

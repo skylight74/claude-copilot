@@ -22,6 +22,12 @@ You are starting a new conversation. **The Agent-First Protocol is now active.**
    - Read files yourself instead of using agents
    - Write plans before agent investigation completes
 
+4. **Time Estimate Prohibition:**
+   - NEVER include hours, days, weeks, months, quarters, or sprints in any output
+   - NEVER provide completion dates, deadlines, or duration predictions
+   - Use phases, priorities, complexity, and dependencies instead
+   - See CLAUDE.md "No Time Estimates Policy" for acceptable alternatives
+
 ## Request Type → Agent Mapping
 
 | Type | Indicators | Agent to Invoke |

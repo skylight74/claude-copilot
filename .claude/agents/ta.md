@@ -137,14 +137,19 @@ model: sonnet
 - [Component 1]: [How it's affected]
 
 ### Tasks
+<!-- Phases are logical groupings, NOT time-based. Never add durations. -->
 
 #### Phase 1: [Name]
+Complexity: [Low | Medium | High]
+Prerequisites: [None | Phase X complete]
 - [ ] Task 1: [Description]
   - Acceptance: [Criteria]
   - Dependencies: [None | Task X]
 - [ ] Task 2: [Description]
 
 #### Phase 2: [Name]
+Complexity: [Low | Medium | High]
+Prerequisites: Phase 1 complete
 [Continue pattern]
 
 ### Risks

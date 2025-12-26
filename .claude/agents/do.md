@@ -223,12 +223,12 @@ groups:
 ## Incident Response
 
 ### Severity Levels
-| Level | Description | Response Time |
-|-------|-------------|---------------|
-| P1 | Complete outage | Immediate |
-| P2 | Major feature broken | < 1 hour |
-| P3 | Minor issue | < 4 hours |
-| P4 | Low impact | Next business day |
+| Level | Description | Expected Response |
+|-------|-------------|-------------------|
+| P1 | Complete outage | All hands, drop everything |
+| P2 | Major feature broken | Dedicated incident response |
+| P3 | Minor issue | Next available engineer |
+| P4 | Low impact | Normal queue priority |
 
 ### Incident Checklist
 1. Acknowledge the incident

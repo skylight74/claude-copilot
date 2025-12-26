@@ -112,7 +112,7 @@ For users who want to add to their knowledge.
 | **Audience** | Who is this for? Who is it NOT for? |
 | **Problems** | What struggles bring people to you? |
 | **Outcomes** | What do clients/users get? How is success measured? |
-| **Delivery** | How is work delivered? Timeline? Format? |
+| **Delivery** | How is work delivered? Process? Format? |
 
 **Output:** `03-products/` or `03-services/` documents
 
