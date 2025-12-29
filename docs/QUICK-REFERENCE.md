@@ -202,7 +202,7 @@ your-project/
 
 ---
 
-## The Four Pillars
+## The Five Pillars
 
 ### 1. Memory Copilot
 **MCP server providing persistent memory across sessions**
@@ -258,7 +258,31 @@ your-project/
 - `~/.claude/knowledge`: Global knowledge (auto-detected)
 - `DATABASE_URL`: PostgreSQL for private skills (optional)
 
-### 4. Protocol
+### 4. Task Copilot
+**MCP server for ephemeral PRD, task, and work product storage**
+
+Agents store detailed work products here instead of returning them to the main session, reducing context usage by ~96%.
+
+| Tool | Purpose |
+|------|---------|
+| `prd_create` | Create product requirements document |
+| `prd_get` | Retrieve PRD details |
+| `prd_list` | List PRDs for initiative |
+| `task_create` | Create task or subtask |
+| `task_update` | Update task status and notes |
+| `task_get` | Retrieve task details |
+| `task_list` | List tasks with filters |
+| `work_product_store` | Store agent output |
+| `work_product_get` | Retrieve full work product |
+| `work_product_list` | List work products for task |
+| `progress_summary` | Get compact progress overview (~200 tokens) |
+| `initiative_link` | Link Memory Copilot initiative to Task Copilot |
+
+**Environment:**
+- `TASK_DB_PATH`: Database storage path (default: `~/.claude/tasks`)
+- `WORKSPACE_ID`: Links to Memory Copilot workspace (auto-detected)
+
+### 5. Protocol
 **Commands enforcing battle-tested workflows**
 
 | Command | Level | Purpose |

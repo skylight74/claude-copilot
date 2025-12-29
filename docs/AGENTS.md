@@ -303,6 +303,57 @@ User Request: "Redesign our onboarding experience"
 
 ---
 
+## Task Copilot Integration
+
+Agents store their detailed work products in Task Copilot instead of returning them to the main session. This reduces context usage by ~96%.
+
+### How It Works
+
+```
+User Request: "Design the auth system"
+         │
+         ▼
+    @agent-ta
+    (creates PRD, breaks down tasks)
+         │
+         ├──→ Stores PRD in Task Copilot (prd_create)
+         │
+         ├──→ Creates tasks (task_create)
+         │
+         └──→ Returns summary to main session (~100 tokens)
+              "Created PRD-001 with 5 tasks. Ready to proceed."
+```
+
+### Work Product Types
+
+Each agent stores specific types of work:
+
+| Agent | Work Product Type | What's Stored |
+|-------|------------------|---------------|
+| `ta` | `architecture`, `technical_design` | System designs, ADRs, task breakdowns |
+| `me` | `implementation` | Code changes, refactoring notes |
+| `qa` | `test_plan` | Test strategies, coverage reports |
+| `sec` | `security_review` | Vulnerability assessments, threat models |
+| `doc` | `documentation` | API docs, guides, READMEs |
+| `do` | `technical_design` | Pipeline configs, infrastructure designs |
+| `sd`, `uxd`, `uids`, `uid`, `cw` | `other` | Journey maps, wireframes, design specs, copy |
+
+### Benefits
+
+- **Reduced context**: Main session stays focused (~200 tokens vs ~8000)
+- **Persistent storage**: Work products survive session restarts
+- **Progress tracking**: `progress_summary()` shows compact status
+- **Work retrieval**: `work_product_get(id)` retrieves full details when needed
+
+### Agent Workflow
+
+1. Agent receives task (with Task ID if assigned)
+2. Agent stores detailed work in Task Copilot
+3. Agent returns minimal summary to main session
+4. Main session continues with low context overhead
+
+---
+
 ## Custom Agents
 
 Teams can add domain-specific agents. Example with a custom `@agent-cpa`:

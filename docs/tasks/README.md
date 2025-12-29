@@ -6,17 +6,17 @@ This directory contains the task breakdown for implementing the Framework Improv
 
 | ID | Task | Priority | Agent | Status |
 |----|------|----------|-------|--------|
-| DOC-1 | Quick Reference Card | P0 | @agent-doc | Not Started |
-| DOC-2 | Learning Roadmap | P0 | @agent-doc | Not Started |
-| DOC-3 | Decision Matrices | P0 | @agent-doc | Not Started |
-| SETUP-1 | Unified Setup Command | P1 | @agent-me | Not Started |
-| SETUP-2 | 15-Minute Quick Start | P1 | @agent-doc + @agent-me | Not Started |
-| SETUP-3 | Template Variables | P1 | @agent-me | Not Started |
-| CMD-1 | /memory Command | P1 | @agent-me | Not Started |
-| CMD-2 | /extensions Command | P1 | @agent-me | Not Started |
-| AGENT-1 | Simplified Agent Format | P2 | @agent-ta | Not Started |
-| SKILLS-1 | Auto-Discovery | P2 | @agent-me | Not Started |
-| QA-1 | Smoke Test Suite | P2 | @agent-qa | In Progress |
+| DOC-1 | Quick Reference Card | P0 | @agent-doc | ✅ Complete |
+| DOC-2 | Learning Roadmap | P0 | @agent-doc | ✅ Complete |
+| DOC-3 | Decision Matrices | P0 | @agent-doc | ✅ Complete |
+| SETUP-1 | Unified Setup Command | P1 | @agent-me | ✅ Complete |
+| SETUP-2 | 15-Minute Quick Start | P1 | @agent-doc + @agent-me | ✅ Complete |
+| SETUP-3 | Template Variables | P1 | @agent-me | ✅ Complete |
+| CMD-1 | /memory Command | P1 | @agent-me | ✅ Complete |
+| CMD-2 | /extensions Command | P1 | @agent-me | ✅ Complete |
+| AGENT-1 | Simplified Agent Format | P2 | @agent-ta | ⏸️ Deferred |
+| SKILLS-1 | Auto-Discovery | P2 | @agent-me | ✅ Complete |
+| QA-1 | Smoke Test Suite | P2 | @agent-qa | ✅ Complete |
 
 ## Recommended Implementation Order
 
