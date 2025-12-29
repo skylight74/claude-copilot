@@ -4,6 +4,17 @@ This guide walks through the complete journey from first discovering Claude Copi
 
 ---
 
+## Quick Start Decision Matrix
+
+| I am... | Start Here | Required Steps | Time |
+|---------|------------|----------------|------|
+| **First-time user (solo)** | Phase 1 → Phase 4 | Clone → Machine Setup → Project Setup → Work | 15-30 min |
+| **First-time user (team member)** | Phase 1 → Phase 6 | Clone → Machine Setup → Clone Team Knowledge → Link → Project Setup | 20-40 min |
+| **Have Copilot, new project** | Phase 3 | `/setup-project` in project | 2-5 min |
+| **Resuming work** | `/continue` | Just load and continue | Instant |
+| **Setting up team knowledge** | Phase 5 | `/knowledge-copilot` | 30-60 min |
+| **Team lead (first time)** | Phase 1 → Phase 5 | Full setup + knowledge creation | 60-90 min |
+
 ## Overview
 
 ```

@@ -2,23 +2,39 @@
  * Local File Provider
  *
  * Fallback for git-synced skills stored in the repository
+ * Auto-discovers skills from .claude/skills directories
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
+import { homedir } from 'os';
 import type { Skill, SkillMeta, ProviderResult } from '../types.js';
+
+// Discovery paths for auto-scanning (in priority order)
+const DISCOVERY_PATHS = [
+  '.claude/skills',                                  // Project-level skills
+  join(homedir(), '.claude', 'skills'),             // User-level skills
+];
+
+interface SkillCacheEntry {
+  meta: SkillMeta;
+  path: string;
+  mtime: number;
+}
 
 export class LocalProvider {
   private skillsPath: string;
   private skillsCache: Map<string, SkillMeta> = new Map();
+  private discoveryCache: Map<string, SkillCacheEntry> = new Map();
 
   constructor(skillsPath: string) {
     this.skillsPath = skillsPath;
     this.scanSkills();
+    this.discoverSkills();
   }
 
   /**
-   * Scan local skills directory
+   * Scan local skills directory (legacy manifest-based)
    */
   private scanSkills(): void {
     if (!existsSync(this.skillsPath)) {
@@ -30,6 +46,93 @@ export class LocalProvider {
     } catch (error) {
       console.error('Error scanning local skills:', error);
     }
+  }
+
+  /**
+   * Auto-discover skills from standard paths
+   */
+  private discoverSkills(): void {
+    for (const basePath of DISCOVERY_PATHS) {
+      try {
+        this.discoverInPath(basePath);
+      } catch (error) {
+        // Silently continue if discovery path doesn't exist
+        if (error instanceof Error && !error.message.includes('ENOENT')) {
+          console.warn(`Error discovering skills in ${basePath}:`, error);
+        }
+      }
+    }
+  }
+
+  /**
+   * Discover skills in a specific path
+   */
+  private discoverInPath(basePath: string): void {
+    if (!existsSync(basePath)) {
+      return;
+    }
+
+    const skillDirs = readdirSync(basePath, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+
+    for (const dir of skillDirs) {
+      const skillPath = join(basePath, dir.name, 'SKILL.md');
+      if (existsSync(skillPath)) {
+        // Check if we need to refresh this skill
+        if (this.shouldRefresh(skillPath)) {
+          const meta = this.parseSkillMeta(skillPath);
+          if (meta) {
+            const validation = this.validateSkill(meta);
+            if (validation.valid) {
+              const stat = statSync(skillPath);
+              this.discoveryCache.set(meta.name, {
+                meta,
+                path: skillPath,
+                mtime: stat.mtimeMs
+              });
+              // Also add to main cache for unified listing
+              this.skillsCache.set(meta.name, meta);
+            } else {
+              console.warn(`Skipping ${skillPath}: ${validation.errors.join(', ')}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Check if a skill file needs to be refreshed
+   */
+  private shouldRefresh(skillPath: string): boolean {
+    // Find cached entry by path
+    for (const [name, entry] of this.discoveryCache.entries()) {
+      if (entry.path === skillPath) {
+        const stat = statSync(skillPath);
+        return stat.mtimeMs > entry.mtime;
+      }
+    }
+    // Not in cache, needs to be loaded
+    return true;
+  }
+
+  /**
+   * Validate skill metadata
+   */
+  private validateSkill(skill: Partial<SkillMeta>): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!skill.name || skill.name.trim() === '') {
+      errors.push('Missing: name');
+    }
+    if (!skill.description || skill.description.trim() === '') {
+      errors.push('Missing: description');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
   }
 
   /**
@@ -67,6 +170,7 @@ export class LocalProvider {
       // Parse YAML frontmatter
       const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
       if (!frontmatterMatch) {
+        console.warn(`No frontmatter found in ${skillPath}`);
         return null;
       }
 
@@ -76,6 +180,7 @@ export class LocalProvider {
       const descMatch = frontmatter.match(/description:\s*(.+)/);
 
       if (!nameMatch) {
+        console.warn(`No name field found in frontmatter: ${skillPath}`);
         return null;
       }
 
@@ -98,7 +203,8 @@ export class LocalProvider {
         source: 'local'
       };
     } catch (error) {
-      console.error(`Error parsing skill at ${skillPath}:`, error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`Failed to parse ${skillPath}: ${message}`);
       return null;
     }
   }
@@ -124,6 +230,36 @@ export class LocalProvider {
    * Get skill by name
    */
   getSkill(name: string): ProviderResult<Skill> {
+    // First check discovered cache (faster, has path cached)
+    const discovered = this.discoveryCache.get(name);
+    if (discovered) {
+      try {
+        const content = readFileSync(discovered.path, 'utf-8');
+        return {
+          success: true,
+          data: {
+            id: discovered.meta.id,
+            name: discovered.meta.name,
+            description: discovered.meta.description,
+            content,
+            category: discovered.meta.category,
+            keywords: discovered.meta.keywords,
+            source: 'local',
+            version: '1.0.0',
+            isProprietary: false
+          },
+          source: 'local'
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Read error',
+          source: 'local'
+        };
+      }
+    }
+
+    // Fall back to legacy manifest-based search
     const meta = this.skillsCache.get(name);
     if (!meta) {
       return { success: false, error: 'Skill not found', source: 'local' };
@@ -224,11 +360,13 @@ export class LocalProvider {
   }
 
   /**
-   * Refresh skill cache
+   * Refresh skill cache (scans both manifest and discovery paths)
    */
   refresh(): void {
     this.skillsCache.clear();
+    this.discoveryCache.clear();
     this.scanSkills();
+    this.discoverSkills();
   }
 
   /**
@@ -236,5 +374,30 @@ export class LocalProvider {
    */
   getCount(): number {
     return this.skillsCache.size;
+  }
+
+  /**
+   * Get count of auto-discovered skills
+   */
+  getDiscoveredCount(): number {
+    return this.discoveryCache.size;
+  }
+
+  /**
+   * Get list of discovered skills with their source paths
+   */
+  getDiscoveredSkills(): Array<{ skill: SkillMeta; path: string }> {
+    return Array.from(this.discoveryCache.values()).map(entry => ({
+      skill: entry.meta,
+      path: entry.path
+    }));
+  }
+
+  /**
+   * Force re-scan of discovery paths (clears cache)
+   */
+  rediscover(): void {
+    this.discoveryCache.clear();
+    this.discoverSkills();
   }
 }

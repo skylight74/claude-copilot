@@ -15,6 +15,83 @@ This file provides guidance to Claude Code when working with the Claude Copilot 
 
 ---
 
+## Quick Decision Guide
+
+### Feature Comparison
+
+| Feature | Invocation | Persistence | Best For |
+|---------|------------|-------------|----------|
+| **Memory** | Auto | Cross-session | Context preservation, decisions, lessons |
+| **Agents** | Protocol | Session | Expert tasks, complex work |
+| **Skills** | Auto | On-demand | Reusable patterns, workflows |
+| **Commands** | Manual | Session | Quick shortcuts, workflows |
+| **Extensions** | Auto | Permanent | Team standards, custom methodologies |
+
+### Command Selection Matrix
+
+| Command | When to Use | Scope | Run From |
+|---------|-------------|-------|----------|
+| `/setup` | First time on machine | Machine | `~/.claude/copilot` |
+| `/setup-project` | New project initialization | Project | Any project root |
+| `/update-project` | Sync project with latest framework | Project | Project root |
+| `/update-copilot` | Update framework itself | Machine | `~/.claude/copilot` |
+| `/knowledge-copilot` | Create shared knowledge repo | Machine/Team | Any directory |
+| `/protocol` | Start fresh work session | Session | Project root |
+| `/continue` | Resume previous work | Session | Project root |
+| `/memory` | View memory state and recent activity | Session | Project root |
+
+### Agent Selection Matrix
+
+| Scenario | Start With | Then Route To | Why |
+|----------|------------|---------------|-----|
+| Bug reported | `/protocol` (DEFECT) | `@agent-qa` | Reproduce, diagnose, test fix |
+| New feature | `/protocol` (EXPERIENCE) | `@agent-sd` → `@agent-uxd` | Journey design → interaction |
+| Architecture question | `/protocol` (ARCHITECTURE) | `@agent-ta` | System design expertise |
+| Code implementation | `/protocol` (FEATURE) | `@agent-me` | Write production code |
+| Security concern | Any agent | `@agent-sec` | Vulnerability analysis |
+| API documentation | Any agent | `@agent-doc` | Technical writing |
+| CI/CD pipeline | `/protocol` (DEVOPS) | `@agent-do` | Infrastructure automation |
+| UI component | `@agent-uids` | `@agent-uid` | Visual design → implementation |
+
+### Use Case Mapping
+
+| I want to... | Start with | Next Step |
+|--------------|------------|-----------|
+| Fix a bug | `/protocol` select DEFECT | Follow Agent-First Protocol |
+| Build a feature | `/protocol` select EXPERIENCE/FEATURE | Agent routes automatically |
+| Resume yesterday's work | `/continue` | Memory loads automatically |
+| View memory state | `/memory` | See current initiative & recent activity |
+| Set up team standards | `/knowledge-copilot` | Create extension repository |
+| Initialize new project | `/setup-project` | Framework installs |
+| Update all projects | `/update-project` (each project) | Syncs latest changes |
+| Search past decisions | Use `memory_search` tool | Semantic search across sessions |
+| Load reusable pattern | Skills load automatically | Or use `skill_get` manually |
+
+### Extension Type Guide
+
+| Goal | Extension Type | File Pattern | Behavior |
+|------|----------------|--------------|----------|
+| Replace agent entirely | `override` | `agent-name.override.md` | Full replacement |
+| Add to agent sections | `extension` | `agent-name.extension.md` | Section-level merge |
+| Inject skills only | `skills` | `agent-name.skills.json` | Skill injection |
+| Company methodology | `override` | Multiple agents | Custom processes |
+| Add checklists/templates | `extension` | Specific sections | Enhance existing |
+
+### Memory vs Skills vs Extensions
+
+| When to Use | Memory | Skills | Extensions |
+|-------------|--------|--------|------------|
+| Project context | ✓ Store in memory | | |
+| Team decisions | ✓ Store in memory | | |
+| Reusable workflows | | ✓ Create skill | |
+| Company standards | | | ✓ Create extension |
+| Past lessons | ✓ Store in memory | | |
+| Custom methodologies | | | ✓ Create extension |
+| Tool integrations | | ✓ Create skill | |
+| Cross-project patterns | | ✓ Global skills | ✓ Global extensions |
+
+---
+
 ## The Four Pillars
 
 ### 1. Memory Copilot
@@ -101,6 +178,7 @@ Commands enforcing battle-tested workflows.
 | `/knowledge-copilot` | User | Build or link shared knowledge repository |
 | `/protocol` | Project | Start fresh work with Agent-First Protocol |
 | `/continue` | Project | Resume previous work via Memory Copilot |
+| `/memory` | Project | View current memory state and recent activity |
 
 ---
 
@@ -246,6 +324,7 @@ See [EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for full documentation on:
 | Agents | `.claude/agents/` |
 | Commands | `.claude/commands/` |
 | MCP Servers | `mcp-servers/` |
+| Decision matrices | `docs/DECISION-GUIDE.md` |
 | Operations docs | `docs/operations/` |
 | Templates | `templates/` |
 | Extension spec | `docs/EXTENSION-SPEC.md` |

@@ -154,8 +154,9 @@ mv /old/project/path /new/project/path
 | Tool | Description |
 |------|-------------|
 | `initiative_start` | Start a new initiative (archives existing) |
-| `initiative_update` | Update current initiative progress |
-| `initiative_get` | Get current initiative as markdown |
+| `initiative_update` | Update current initiative progress (supports both slim and legacy modes) |
+| `initiative_get` | Get current initiative as markdown (includes bloat hints) |
+| `initiative_slim` | Slim down initiative by removing bloated task lists (archives data first) |
 | `initiative_complete` | Complete and archive current initiative |
 
 ### Utility
@@ -171,7 +172,81 @@ mv /old/project/path /new/project/path
 | `memory://initiative/current` | Current initiative in markdown format |
 | `memory://context/project` | Project context with recent decisions/lessons |
 
+## Initiative Structure
+
+### Slim Mode (Recommended)
+
+When linked to Task Copilot, initiatives store only essential metadata:
+
+| Field | Purpose | Size |
+|-------|---------|------|
+| `taskCopilotLinked` | Whether linked to Task Copilot | boolean |
+| `activePrdIds` | PRD IDs from Task Copilot | array |
+| `decisions` | Strategic decisions made | array |
+| `lessons` | Learnings captured | array |
+| `keyFiles` | Important files touched | array |
+| `currentFocus` | Current work focus | max 100 chars |
+| `nextAction` | Next action to take | max 100 chars |
+
+**Benefits:**
+- Minimal context usage (typically 75%+ reduction)
+- Task details live in Task Copilot where they belong
+- Fast loading on `/continue`
+
+### Legacy Mode (Deprecated)
+
+Old initiatives stored everything inline:
+
+| Field | Issue |
+|-------|-------|
+| `completed` | Can grow to 50+ items (context bloat) |
+| `inProgress` | Duplicates Task Copilot data |
+| `blocked` | Duplicates Task Copilot data |
+| `resumeInstructions` | Often 500+ characters (verbose) |
+
+**Migration:** Use `initiative_slim` to convert legacy initiatives to slim mode.
+
 ## Usage Examples
+
+### Slim Initiative Workflow
+
+```json
+{
+  "tool": "initiative_update",
+  "arguments": {
+    "taskCopilotLinked": true,
+    "activePrdIds": ["PRD-001"],
+    "currentFocus": "Phase 2: Database schema",
+    "nextAction": "Run task TASK-123",
+    "decisions": ["Use PostgreSQL for vector search"],
+    "keyFiles": ["src/db/schema.sql"]
+  }
+}
+```
+
+### Slim Down Bloated Initiative
+
+```json
+{
+  "tool": "initiative_slim",
+  "arguments": {
+    "archiveDetails": true
+  }
+}
+```
+
+Returns:
+```json
+{
+  "initiativeId": "abc-123",
+  "archived": true,
+  "archivePath": "~/.claude/memory/archives/abc-123_2025-01-15_pre_slim.json",
+  "removedFields": ["completed", "inProgress", "blocked", "resumeInstructions"],
+  "beforeSize": 2400,
+  "afterSize": 600,
+  "savings": "75% reduction"
+}
+```
 
 ### Store a decision
 

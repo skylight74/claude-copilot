@@ -16,6 +16,7 @@ export {
   initiativeStart,
   initiativeUpdate,
   initiativeGet,
+  initiativeSlim,
   initiativeComplete,
   initiativeToMarkdown
 } from './initiative-tools.js';

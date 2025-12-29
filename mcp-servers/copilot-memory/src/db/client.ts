@@ -9,7 +9,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
 
-import { SCHEMA_SQL, VECTOR_SCHEMA_SQL, MIGRATION_TABLE_SQL, CURRENT_VERSION } from './schema.js';
+import { SCHEMA_SQL, VECTOR_SCHEMA_SQL, MIGRATION_TABLE_SQL, CURRENT_VERSION, MIGRATION_V2_SQL } from './schema.js';
 import type { MemoryRow, InitiativeRow, EmbeddingVector } from '../types.js';
 
 export class DatabaseClient {
@@ -54,8 +54,8 @@ export class DatabaseClient {
     const row = this.db.prepare('SELECT MAX(version) as version FROM migrations').get() as { version: number | null };
     const currentVersion = row?.version || 0;
 
-    if (currentVersion < CURRENT_VERSION) {
-      // Run schema
+    if (currentVersion < 1) {
+      // Run initial schema
       this.db.exec(SCHEMA_SQL);
 
       // Run vector schema separately (different virtual table syntax)
@@ -68,9 +68,23 @@ export class DatabaseClient {
 
       // Record migration
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
-        CURRENT_VERSION,
+        1,
         new Date().toISOString()
       );
+    }
+
+    if (currentVersion < 2) {
+      // Run migration v2: Add slim initiative fields
+      try {
+        this.db.exec(MIGRATION_V2_SQL);
+        this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+          2,
+          new Date().toISOString()
+        );
+      } catch (err) {
+        // Columns might already exist if schema was created fresh
+        console.warn('Migration v2 warning:', err);
+      }
     }
   }
 
@@ -211,18 +225,29 @@ export class DatabaseClient {
 
   upsertInitiative(initiative: Omit<InitiativeRow, 'project_id'>): void {
     this.db.prepare(`
-      INSERT INTO initiatives (id, project_id, name, goal, status, completed, in_progress, blocked, decisions, lessons, key_files, resume_instructions, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO initiatives (
+        id, project_id, name, goal, status,
+        task_copilot_linked, active_prd_ids,
+        decisions, lessons, key_files,
+        current_focus, next_action,
+        completed, in_progress, blocked, resume_instructions,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET
         name = excluded.name,
         goal = excluded.goal,
         status = excluded.status,
-        completed = excluded.completed,
-        in_progress = excluded.in_progress,
-        blocked = excluded.blocked,
+        task_copilot_linked = excluded.task_copilot_linked,
+        active_prd_ids = excluded.active_prd_ids,
         decisions = excluded.decisions,
         lessons = excluded.lessons,
         key_files = excluded.key_files,
+        current_focus = excluded.current_focus,
+        next_action = excluded.next_action,
+        completed = excluded.completed,
+        in_progress = excluded.in_progress,
+        blocked = excluded.blocked,
         resume_instructions = excluded.resume_instructions,
         updated_at = excluded.updated_at
     `).run(
@@ -231,12 +256,16 @@ export class DatabaseClient {
       initiative.name,
       initiative.goal,
       initiative.status,
-      initiative.completed,
-      initiative.in_progress,
-      initiative.blocked,
+      initiative.task_copilot_linked,
+      initiative.active_prd_ids,
       initiative.decisions,
       initiative.lessons,
       initiative.key_files,
+      initiative.current_focus,
+      initiative.next_action,
+      initiative.completed,
+      initiative.in_progress,
+      initiative.blocked,
       initiative.resume_instructions,
       initiative.created_at,
       initiative.updated_at
@@ -249,20 +278,31 @@ export class DatabaseClient {
 
     // Copy to archive
     this.db.prepare(`
-      INSERT INTO initiatives_archive (id, project_id, name, goal, status, completed, in_progress, blocked, decisions, lessons, key_files, resume_instructions, created_at, updated_at, archived_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO initiatives_archive (
+        id, project_id, name, goal, status,
+        task_copilot_linked, active_prd_ids,
+        decisions, lessons, key_files,
+        current_focus, next_action,
+        completed, in_progress, blocked, resume_instructions,
+        created_at, updated_at, archived_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       initiative.id,
       initiative.project_id,
       initiative.name,
       initiative.goal,
       initiative.status,
-      initiative.completed,
-      initiative.in_progress,
-      initiative.blocked,
+      initiative.task_copilot_linked,
+      initiative.active_prd_ids,
       initiative.decisions,
       initiative.lessons,
       initiative.key_files,
+      initiative.current_focus,
+      initiative.next_action,
+      initiative.completed,
+      initiative.in_progress,
+      initiative.blocked,
       initiative.resume_instructions,
       initiative.created_at,
       initiative.updated_at,

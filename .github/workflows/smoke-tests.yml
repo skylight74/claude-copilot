@@ -1,0 +1,47 @@
+name: Smoke Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            mcp-servers/copilot-memory/package-lock.json
+            mcp-servers/skills-copilot/package-lock.json
+
+      - name: Install Memory Copilot dependencies
+        working-directory: mcp-servers/copilot-memory
+        run: npm ci
+
+      - name: Install Skills Copilot dependencies
+        working-directory: mcp-servers/skills-copilot
+        run: npm ci
+
+      - name: Run smoke tests
+        run: |
+          chmod +x ./scripts/smoke-test.sh
+          ./scripts/smoke-test.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: /tmp/claude-copilot-smoke-test-*
+          retention-days: 7
+          if-no-files-found: ignore

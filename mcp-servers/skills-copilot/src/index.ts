@@ -144,6 +144,19 @@ const TOOLS = [
       properties: {}
     }
   },
+  {
+    name: 'skill_discover',
+    description: 'Force re-scan of local skill directories (.claude/skills and ~/.claude/skills). Use when skills are added/modified outside the session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        clearCache: {
+          type: 'boolean',
+          description: 'Clear cache before re-scanning (default: false)'
+        }
+      }
+    }
+  },
   // Extension tools for knowledge repository integration
   {
     name: 'extension_get',
@@ -439,6 +452,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           a.source as 'private' | 'local' | 'cache' | 'all' | undefined
         );
 
+        // Get discovered skills for annotation
+        const discoveredSkills = new Set(
+          local.getDiscoveredSkills().map(s => s.skill.name)
+        );
+
         const grouped: Record<string, SkillMeta[]> = {};
         for (const skill of results) {
           const src = skill.source;
@@ -449,12 +467,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let output = '## Available Skills\n\n';
         for (const [source, skills] of Object.entries(grouped)) {
           output += `### ${source.charAt(0).toUpperCase() + source.slice(1)} (${skills.length})\n\n`;
-          output += '| Name | Category | Keywords |\n|------|----------|----------|\n';
+          output += '| Name | Category | Keywords | Discovery |\n|------|----------|----------|----------|\n';
           for (const skill of skills) {
-            output += `| ${skill.name} | ${skill.category || '-'} | ${skill.keywords.slice(0, 3).join(', ')} |\n`;
+            const discoveryStatus = discoveredSkills.has(skill.name) ? 'auto' : 'manifest';
+            output += `| ${skill.name} | ${skill.category || '-'} | ${skill.keywords.slice(0, 3).join(', ')} | ${discoveryStatus} |\n`;
           }
           output += '\n';
         }
+
+        output += '\n**Discovery methods:**\n';
+        output += '- `auto`: Auto-discovered from .claude/skills directories\n';
+        output += '- `manifest`: Loaded from configured skills path or knowledge manifest\n';
 
         return { content: [{ type: 'text', text: output }] };
       }
@@ -516,9 +539,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'skill_discover': {
+        const clearCache = a.clearCache as boolean | undefined;
+
+        if (clearCache) {
+          local.refresh();
+        } else {
+          local.rediscover();
+        }
+
+        const discovered = local.getDiscoveredSkills();
+        const totalCount = local.getCount();
+
+        let output = `## Skills Discovery ${clearCache ? '(with cache clear)' : '(re-scan)'}\n\n`;
+        output += `**Total skills:** ${totalCount}\n`;
+        output += `**Auto-discovered:** ${discovered.length}\n\n`;
+
+        if (discovered.length > 0) {
+          output += '### Discovered Skills\n\n';
+          output += '| Name | Category | Path |\n';
+          output += '|------|----------|------|\n';
+
+          for (const { skill, path } of discovered) {
+            const category = skill.category || '-';
+            const shortPath = path.replace(process.env.HOME || '', '~');
+            output += `| ${skill.name} | ${category} | ${shortPath} |\n`;
+          }
+        } else {
+          output += 'No skills discovered in:\n';
+          output += '- .claude/skills\n';
+          output += '- ~/.claude/skills\n\n';
+          output += 'Add SKILL.md files to these directories for auto-discovery.';
+        }
+
+        return {
+          content: [{ type: 'text', text: output }]
+        };
+      }
+
       case 'skills_hub_status': {
         const cacheStats = cache.getStats();
         const localCount = local.getCount();
+        const discoveredCount = local.getDiscoveredCount();
         const repoStatus = knowledgeRepo.getStatus();
 
         // Format knowledge repo status for display
@@ -542,7 +604,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           providers: {
             postgres: postgres?.isConnected() ? 'connected' : 'not configured',
             skillsmp: skillsmp ? 'configured' : 'not configured',
-            local: `${localCount} skills found`,
+            local: `${localCount} skills found (${discoveredCount} auto-discovered)`,
             cache: `${cacheStats.total} cached (${Math.round(cacheStats.size / 1024)}KB)`,
             knowledgeRepo: knowledgeRepoDisplay
           },
@@ -550,6 +612,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             cachePath: config.cachePath,
             cacheTtlDays: config.cacheTtlDays,
             localSkillsPath: config.localSkillsPath,
+            discoveryPaths: ['.claude/skills', '~/.claude/skills'],
             knowledgeRepo: {
               projectPath: knowledgeRepoConfig.projectPath || 'not set',
               globalPath: knowledgeRepoConfig.globalPath || '~/.claude/knowledge (default)'
@@ -780,7 +843,7 @@ async function main() {
   if (config.logLevel === 'debug') {
     console.error('Skills Hub server starting...');
     console.error(`SkillsMP: ${skillsmp ? 'configured' : 'not configured'}`);
-    console.error(`Local skills: ${local.getCount()} found`);
+    console.error(`Local skills: ${local.getCount()} found (${local.getDiscoveredCount()} auto-discovered)`);
     console.error(`Cache: ${cache.getStats().total} entries`);
     const repoStatus = knowledgeRepo.getStatus();
     if (repoStatus.global) {

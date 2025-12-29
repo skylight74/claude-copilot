@@ -32,13 +32,26 @@ export interface Initiative {
   name: string;
   goal?: string;
   status: InitiativeStatus;
-  completed: string[];
-  inProgress: string[];
-  blocked: string[];
+
+  // NEW: Task Copilot integration (slim mode)
+  taskCopilotLinked?: boolean;
+  activePrdIds?: string[];
+
+  // KEEP: Permanent knowledge (decisions, lessons, keyFiles)
   decisions: string[];
   lessons: string[];
   keyFiles: string[];
+
+  // NEW: Slim resume context (replaces resumeInstructions)
+  currentFocus?: string;   // Max 100 chars
+  nextAction?: string;     // Max 100 chars
+
+  // DEPRECATED: Use Task Copilot instead (kept for backward compatibility)
+  completed: string[];
+  inProgress: string[];
+  blocked: string[];
   resumeInstructions?: string;
+
   createdAt: string;
   updatedAt: string;
 }
@@ -88,14 +101,40 @@ export interface InitiativeStartInput {
 }
 
 export interface InitiativeUpdateInput {
-  completed?: string[];
-  inProgress?: string[];
-  blocked?: string[];
+  // NEW: Task Copilot integration
+  taskCopilotLinked?: boolean;
+  activePrdIds?: string[];
+
+  // KEEP: Permanent knowledge
   decisions?: string[];
   lessons?: string[];
   keyFiles?: string[];
+
+  // NEW: Slim resume context
+  currentFocus?: string;
+  nextAction?: string;
+
+  // DEPRECATED but supported for backward compatibility
+  completed?: string[];
+  inProgress?: string[];
+  blocked?: string[];
   resumeInstructions?: string;
+
   status?: InitiativeStatus;
+}
+
+export interface InitiativeSlimInput {
+  archiveDetails?: boolean;  // Save old data to file before slimming (default: true)
+}
+
+export interface InitiativeSlimOutput {
+  initiativeId: string;
+  archived: boolean;
+  archivePath?: string;
+  removedFields: string[];
+  beforeSize: number;    // Approximate token count
+  afterSize: number;     // Approximate token count
+  savings: string;       // "75% reduction"
 }
 
 // Database row types (snake_case for SQLite)
@@ -117,13 +156,26 @@ export interface InitiativeRow {
   name: string;
   goal: string | null;
   status: string;
-  completed: string;
-  in_progress: string;
-  blocked: string;
+
+  // NEW: Task Copilot integration
+  task_copilot_linked: number;  // SQLite boolean (0/1)
+  active_prd_ids: string;       // JSON array
+
+  // KEEP: Permanent knowledge
   decisions: string;
   lessons: string;
   key_files: string;
+
+  // NEW: Slim resume context
+  current_focus: string | null;
+  next_action: string | null;
+
+  // DEPRECATED but kept for backward compatibility
+  completed: string;
+  in_progress: string;
+  blocked: string;
   resume_instructions: string | null;
+
   created_at: string;
   updated_at: string;
 }

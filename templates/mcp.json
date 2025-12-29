@@ -1,23 +1,26 @@
 {
-  "_setup_instructions": {
-    "1_home_path": "Replace all {{HOME_PATH}} with your actual home directory (e.g., /Users/username). Do NOT use ~",
-    "2_project_name": "Replace {{PROJECT_NAME}} with your project folder name (e.g., my-app)",
-    "3_knowledge_repo": "Global knowledge repo auto-detected at ~/.claude/knowledge (no config needed). Add KNOWLEDGE_REPO_PATH only for project-specific overrides."
-  },
   "mcpServers": {
     "copilot-memory": {
       "command": "node",
-      "args": ["{{HOME_PATH}}/.claude/copilot/mcp-servers/copilot-memory/dist/index.js"],
+      "args": ["$COPILOT_PATH/mcp-servers/copilot-memory/dist/index.js"],
       "env": {
-        "MEMORY_PATH": "{{HOME_PATH}}/.claude/memory",
-        "WORKSPACE_ID": "{{PROJECT_NAME}}"
+        "MEMORY_PATH": "$HOME/.claude/memory",
+        "WORKSPACE_ID": "$PROJECT_NAME"
       }
     },
     "skills-copilot": {
       "command": "node",
-      "args": ["{{HOME_PATH}}/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
+      "args": ["$COPILOT_PATH/mcp-servers/skills-copilot/dist/index.js"],
       "env": {
         "LOCAL_SKILLS_PATH": "./.claude/skills"
+      }
+    },
+    "task-copilot": {
+      "command": "node",
+      "args": ["$COPILOT_PATH/mcp-servers/task-copilot/dist/index.js"],
+      "env": {
+        "TASK_DB_PATH": "$HOME/.claude/tasks",
+        "WORKSPACE_ID": "$PROJECT_NAME"
       }
     }
   }

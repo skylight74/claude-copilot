@@ -124,33 +124,66 @@ Should show 12+ files.
 
 ---
 
-## Step 7: Create .mcp.json
+## Step 7: Create .mcp.json with Template Variable Expansion
 
-Create `.mcp.json` with absolute paths. Replace `{{HOME_PATH}}` and `{{PROJECT_NAME}}` with actual values:
+Read the template and expand variables automatically:
 
-```json
-{
-  "mcpServers": {
-    "copilot-memory": {
-      "command": "node",
-      "args": ["{{HOME_PATH}}/.claude/copilot/mcp-servers/copilot-memory/dist/index.js"],
-      "env": {
-        "MEMORY_PATH": "{{HOME_PATH}}/.claude/memory",
-        "WORKSPACE_ID": "{{PROJECT_NAME}}"
-      }
-    },
-    "skills-copilot": {
-      "command": "node",
-      "args": ["{{HOME_PATH}}/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
-      "env": {
-        "LOCAL_SKILLS_PATH": "./.claude/skills"
-      }
-    }
-  }
-}
+```bash
+cat ~/.claude/copilot/templates/mcp.json
 ```
 
-**CRITICAL:** Use actual values, not placeholders. Do NOT use `~`.
+**Expand these variables:**
+
+| Variable | Value | Example |
+|----------|-------|---------|
+| `$HOME` | User's home directory | `/Users/pabs` |
+| `$PROJECT_PATH` | Current working directory | `/Users/pabs/Sites/my-app` |
+| `$PROJECT_NAME` | Directory basename | `my-app` |
+| `$COPILOT_PATH` | Claude Copilot location | `$HOME/.claude/copilot` |
+
+**Process:**
+
+1. Read template from `~/.claude/copilot/templates/mcp.json`
+2. Replace all variables:
+   - `$HOME` → actual home path (NO tilde)
+   - `$PROJECT_PATH` → result of `pwd`
+   - `$PROJECT_NAME` → result of `basename $(pwd)`
+   - `$COPILOT_PATH` → `$HOME/.claude/copilot` (expanded)
+3. Validate expansion (see validation below)
+4. Write to `.mcp.json`
+
+**CRITICAL:**
+- All paths must be absolute (no `~` or `$HOME` in final output)
+- No unexpanded variables (`$xxx`) in final file
+- Verify JSON is valid
+
+**Validation After Expansion:**
+
+```bash
+# Check for unexpanded variables
+grep -E '\$[A-Z_]+' .mcp.json && echo "ERROR: Unexpanded variables found" || echo "Variables OK"
+
+# Verify critical paths exist
+ls -l "$HOME/.claude/copilot/mcp-servers/copilot-memory/dist/index.js" && echo "Memory server OK" || echo "Memory server MISSING"
+ls -l "$HOME/.claude/copilot/mcp-servers/skills-copilot/dist/index.js" && echo "Skills server OK" || echo "Skills server MISSING"
+
+# Validate JSON
+node -e "JSON.parse(require('fs').readFileSync('.mcp.json', 'utf8'))" && echo "JSON valid" || echo "JSON INVALID"
+```
+
+**If validation fails:**
+
+Report clear error with fix instructions:
+
+```
+ERROR: Template expansion failed
+
+Variable: $COPILOT_PATH
+Expected: ~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js
+Found: File does not exist
+
+Fix: Run /setup from ~/.claude/copilot first to build MCP servers
+```
 
 ---
 

@@ -29,13 +29,26 @@ CREATE TABLE IF NOT EXISTS initiatives (
   name TEXT NOT NULL,
   goal TEXT,
   status TEXT DEFAULT 'IN PROGRESS' CHECK(status IN ('NOT STARTED', 'IN PROGRESS', 'BLOCKED', 'READY FOR REVIEW', 'COMPLETE')),
-  completed TEXT DEFAULT '[]',
-  in_progress TEXT DEFAULT '[]',
-  blocked TEXT DEFAULT '[]',
+
+  -- NEW: Task Copilot integration
+  task_copilot_linked INTEGER DEFAULT 0,
+  active_prd_ids TEXT DEFAULT '[]',
+
+  -- KEEP: Permanent knowledge
   decisions TEXT DEFAULT '[]',
   lessons TEXT DEFAULT '[]',
   key_files TEXT DEFAULT '[]',
+
+  -- NEW: Slim resume context
+  current_focus TEXT,
+  next_action TEXT,
+
+  -- DEPRECATED: Use Task Copilot instead
+  completed TEXT DEFAULT '[]',
+  in_progress TEXT DEFAULT '[]',
+  blocked TEXT DEFAULT '[]',
   resume_instructions TEXT,
+
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -58,13 +71,26 @@ CREATE TABLE IF NOT EXISTS initiatives_archive (
   name TEXT NOT NULL,
   goal TEXT,
   status TEXT,
-  completed TEXT,
-  in_progress TEXT,
-  blocked TEXT,
+
+  -- NEW: Task Copilot integration
+  task_copilot_linked INTEGER DEFAULT 0,
+  active_prd_ids TEXT DEFAULT '[]',
+
+  -- KEEP: Permanent knowledge
   decisions TEXT,
   lessons TEXT,
   key_files TEXT,
+
+  -- NEW: Slim resume context
+  current_focus TEXT,
+  next_action TEXT,
+
+  -- DEPRECATED
+  completed TEXT,
+  in_progress TEXT,
+  blocked TEXT,
   resume_instructions TEXT,
+
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   archived_at TEXT NOT NULL
@@ -111,4 +137,21 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-export const CURRENT_VERSION = 1;
+export const CURRENT_VERSION = 2;
+
+// Migration for version 2: Add slim initiative fields
+export const MIGRATION_V2_SQL = `
+-- Add new Task Copilot integration fields
+ALTER TABLE initiatives ADD COLUMN task_copilot_linked INTEGER DEFAULT 0;
+ALTER TABLE initiatives ADD COLUMN active_prd_ids TEXT DEFAULT '[]';
+
+-- Add new slim resume context fields
+ALTER TABLE initiatives ADD COLUMN current_focus TEXT;
+ALTER TABLE initiatives ADD COLUMN next_action TEXT;
+
+-- Add same fields to archive table
+ALTER TABLE initiatives_archive ADD COLUMN task_copilot_linked INTEGER DEFAULT 0;
+ALTER TABLE initiatives_archive ADD COLUMN active_prd_ids TEXT DEFAULT '[]';
+ALTER TABLE initiatives_archive ADD COLUMN current_focus TEXT;
+ALTER TABLE initiatives_archive ADD COLUMN next_action TEXT;
+`;

@@ -212,6 +212,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 | Guide | Purpose |
 |-------|---------|
+| [Decision Guide](docs/DECISION-GUIDE.md) | When to use what - quick reference matrices |
 | [User Journey](docs/USER-JOURNEY.md) | Complete setup walkthrough |
 | [Agents](docs/AGENTS.md) | All 12 specialists in detail |
 | [Configuration](docs/CONFIGURATION.md) | .mcp.json, environment variables |

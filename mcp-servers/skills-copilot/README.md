@@ -5,7 +5,8 @@ On-demand skill loading from multiple sources. Reduces token overhead by 85% com
 ## Features
 
 - **Multi-Source Fetching**: Private DB (Postgres) + SkillsMP (25K+ skills) + Local files
-- **Intelligent Caching**: SQLite cache with configurable TTL
+- **Auto-Discovery**: Automatically scans `.claude/skills` directories (no manifest needed)
+- **Intelligent Caching**: SQLite cache with configurable TTL + mtime-based skill cache
 - **On-Demand Loading**: Skills load only when needed (~2K tokens per skill)
 - **Unified Search**: Search across all sources with relevance ranking
 - **Usage Analytics**: Track which skills are used most
@@ -111,10 +112,11 @@ Changes take effect after restarting.
 |------|-------------|
 | `skill_get` | Fetch skill by name from best available source |
 | `skill_search` | Search skills across all sources |
-| `skill_list` | List available skills by source |
+| `skill_list` | List available skills by source (shows auto-discovered vs manifest) |
 | `skill_save` | Save skill to private database |
 | `skill_cache_clear` | Clear cache (all or specific skill) |
-| `skills_hub_status` | Check provider status |
+| `skill_discover` | Force re-scan of auto-discovery paths |
+| `skills_hub_status` | Check provider status (includes discovery stats) |
 
 ### Extension Tools
 
@@ -123,6 +125,66 @@ Changes take effect after restarting.
 | `extension_get` | Get agent extension from knowledge repository |
 | `extension_list` | List all available agent extensions |
 | `manifest_status` | Check knowledge repository configuration |
+
+## Auto-Discovery
+
+Skills Copilot automatically discovers skills from standard directories without requiring manifest configuration.
+
+### Discovery Paths
+
+Skills are auto-discovered from:
+1. `.claude/skills/` (project-level)
+2. `~/.claude/skills/` (user-level)
+
+### Skill Structure
+
+Each skill must be in its own directory with a `SKILL.md` file:
+
+```
+.claude/skills/
+├── my-skill/
+│   └── SKILL.md
+└── another-skill/
+    └── SKILL.md
+```
+
+### Required Frontmatter
+
+Skills must have valid YAML frontmatter with at minimum:
+- `name`: Unique skill identifier
+- `description`: Brief description
+
+```markdown
+---
+name: my-custom-skill
+description: Does something useful
+---
+
+# Skill Content
+
+Your skill content here...
+```
+
+### Validation
+
+Skills are validated on discovery:
+- Missing `name` or `description` → Logged as warning, skipped
+- Parse errors → Logged as warning, skipped
+- Valid skills → Cached for fast access
+
+### Caching
+
+- Discovered skills are cached with modification time
+- Skills are only re-parsed if file has changed
+- Use `skill_discover()` to force re-scan
+- Cache persists across server restarts (in-memory per session)
+
+### Force Re-scan
+
+```
+skill_discover({ clearCache: false })  // Re-scan without clearing main cache
+skill_discover({ clearCache: true })   // Full refresh
+```
 
 ## Usage Examples
 

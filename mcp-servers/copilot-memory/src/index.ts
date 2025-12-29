@@ -26,6 +26,7 @@ import {
   initiativeStart,
   initiativeUpdate,
   initiativeGet,
+  initiativeSlim,
   initiativeComplete,
   initiativeToMarkdown
 } from './tools/index.js';
@@ -169,17 +170,29 @@ const TOOLS = [
   },
   {
     name: 'initiative_update',
-    description: 'Update the current initiative',
+    description: 'Update the current initiative. Supports both slim mode (Task Copilot) and legacy mode.',
     inputSchema: {
       type: 'object',
       properties: {
-        completed: { type: 'array', items: { type: 'string' }, description: 'Tasks to add to completed' },
-        inProgress: { type: 'array', items: { type: 'string' }, description: 'Current in-progress tasks (replaces)' },
-        blocked: { type: 'array', items: { type: 'string' }, description: 'Blocked items (replaces)' },
+        // NEW: Task Copilot integration
+        taskCopilotLinked: { type: 'boolean', description: 'Whether initiative is linked to Task Copilot' },
+        activePrdIds: { type: 'array', items: { type: 'string' }, description: 'Active PRD IDs from Task Copilot' },
+
+        // KEEP: Permanent knowledge
         decisions: { type: 'array', items: { type: 'string' }, description: 'Decisions to add' },
         lessons: { type: 'array', items: { type: 'string' }, description: 'Lessons to add' },
         keyFiles: { type: 'array', items: { type: 'string' }, description: 'Key files to add' },
-        resumeInstructions: { type: 'string', description: 'Resume instructions for next session' },
+
+        // NEW: Slim resume context (max 100 chars each)
+        currentFocus: { type: 'string', description: 'Current focus (max 100 chars, replaces resumeInstructions)' },
+        nextAction: { type: 'string', description: 'Next action to take (max 100 chars)' },
+
+        // DEPRECATED: Use Task Copilot instead (triggers warning if >10 items)
+        completed: { type: 'array', items: { type: 'string' }, description: 'DEPRECATED: Tasks to add to completed (use Task Copilot)' },
+        inProgress: { type: 'array', items: { type: 'string' }, description: 'DEPRECATED: Current in-progress tasks (use Task Copilot)' },
+        blocked: { type: 'array', items: { type: 'string' }, description: 'DEPRECATED: Blocked items (use Task Copilot)' },
+        resumeInstructions: { type: 'string', description: 'DEPRECATED: Resume instructions (use currentFocus + nextAction)' },
+
         status: {
           type: 'string',
           enum: ['NOT STARTED', 'IN PROGRESS', 'BLOCKED', 'READY FOR REVIEW', 'COMPLETE'],
@@ -194,6 +207,19 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {}
+    }
+  },
+  {
+    name: 'initiative_slim',
+    description: 'Slim down initiative by removing bloated task lists (completed, inProgress, blocked, resumeInstructions). Keeps permanent knowledge (decisions, lessons, keyFiles). Archives removed data to file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        archiveDetails: {
+          type: 'boolean',
+          description: 'Save removed data to archive file before slimming (default: true)'
+        }
+      }
     }
   },
   {
@@ -289,12 +315,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'initiative_update': {
         const result = initiativeUpdate(db, {
-          completed: a.completed as string[] | undefined,
-          inProgress: a.inProgress as string[] | undefined,
-          blocked: a.blocked as string[] | undefined,
+          // NEW: Task Copilot integration
+          taskCopilotLinked: a.taskCopilotLinked as boolean | undefined,
+          activePrdIds: a.activePrdIds as string[] | undefined,
+          // KEEP: Permanent knowledge
           decisions: a.decisions as string[] | undefined,
           lessons: a.lessons as string[] | undefined,
           keyFiles: a.keyFiles as string[] | undefined,
+          // NEW: Slim resume context
+          currentFocus: a.currentFocus as string | undefined,
+          nextAction: a.nextAction as string | undefined,
+          // DEPRECATED
+          completed: a.completed as string[] | undefined,
+          inProgress: a.inProgress as string[] | undefined,
+          blocked: a.blocked as string[] | undefined,
           resumeInstructions: a.resumeInstructions as string | undefined,
           status: a.status as InitiativeStatus | undefined
         });
@@ -304,9 +338,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'initiative_get': {
         const result = initiativeGet(db);
         if (result) {
-          return { content: [{ type: 'text', text: initiativeToMarkdown(result) }] };
+          // Add hint if initiative is bloated
+          const totalTasks = result.completed.length + result.inProgress.length + result.blocked.length;
+          const hasLongResume = result.resumeInstructions && result.resumeInstructions.length > 200;
+          const hint = (totalTasks > 10 || hasLongResume)
+            ? '\n\nHINT: This initiative has bloated task lists. Consider using initiative_slim to reduce context usage.'
+            : '';
+          return { content: [{ type: 'text', text: initiativeToMarkdown(result) + hint }] };
         }
         return { content: [{ type: 'text', text: 'No active initiative' }] };
+      }
+
+      case 'initiative_slim': {
+        const result = initiativeSlim(db, {
+          archiveDetails: a.archiveDetails !== undefined ? a.archiveDetails as boolean : true
+        });
+        return { content: [{ type: 'text', text: result ? JSON.stringify(result, null, 2) : 'No active initiative' }] };
       }
 
       case 'initiative_complete': {

@@ -1,0 +1,291 @@
+# Decision Guide: When to Use What
+
+A comprehensive guide to help you choose the right tools, commands, agents, and approaches in Claude Copilot.
+
+---
+
+## Feature Selection
+
+### Feature Comparison
+
+| Feature | Invocation | Persistence | Best For | When NOT to Use |
+|---------|------------|-------------|----------|-----------------|
+| **Memory** | Auto | Cross-session | Context preservation, decisions, lessons | Short-term notes, temporary data |
+| **Agents** | Protocol | Session | Expert tasks, complex work | Simple commands, quick tasks |
+| **Skills** | Auto | On-demand | Reusable patterns, workflows | One-off solutions |
+| **Commands** | Manual | Session | Quick shortcuts, workflows | Complex multi-step processes |
+| **Extensions** | Auto | Permanent | Team standards, custom methodologies | Personal preferences |
+
+### Memory vs Skills vs Extensions
+
+| Question | Use Memory | Use Skills | Use Extensions |
+|----------|------------|------------|----------------|
+| Does it change per project? | ✓ | | |
+| Is it a one-time decision? | ✓ | | |
+| Is it a reusable pattern? | | ✓ | |
+| Does the whole team need it? | | | ✓ |
+| Is it company-specific? | | | ✓ |
+| Does it override base behavior? | | | ✓ |
+| Is it a lesson learned? | ✓ | | |
+| Is it a workflow/automation? | | ✓ | |
+
+---
+
+## Command Selection
+
+### Command Decision Matrix
+
+| I want to... | Command | When | Where to Run |
+|--------------|---------|------|--------------|
+| Set up Claude Copilot first time | `/setup` | Once per machine | `~/.claude/copilot` |
+| Add Copilot to new project | `/setup-project` | Once per project | Project root |
+| Update project files | `/update-project` | After framework updates | Project root |
+| Update framework itself | `/update-copilot` | When new version available | Any directory |
+| Create team knowledge | `/knowledge-copilot` | Once per team/company | Any directory |
+| Start fresh work | `/protocol` | Each work session | Project root |
+| Resume previous work | `/continue` | When returning to work | Project root |
+| Verify MCP servers | `/mcp` | After setup, troubleshooting | Project root |
+
+### Setup Command Flowchart
+
+```
+Are you using Claude Copilot for the first time?
+├─ YES → Run /setup in ~/.claude/copilot
+│        ↓
+│        Is this a new project?
+│        ├─ YES → Run /setup-project in project
+│        └─ NO → Run /update-project in existing project
+│
+└─ NO → Did you update Claude Copilot?
+        ├─ YES → Run /update-project in all projects
+        └─ NO → Just use /protocol or /continue to work
+```
+
+---
+
+## Agent Selection
+
+### Agent Routing Matrix
+
+| Task Type | Primary Agent | Secondary Agent(s) | Why This Flow |
+|-----------|---------------|-------------------|---------------|
+| **Bug Fix** | `qa` | → `me` | QA reproduces, Engineer fixes |
+| **New Feature** | `sd` | → `uxd` → `uid` | Service → UX → Implementation |
+| **API Design** | `ta` | → `me` → `doc` | Architecture → Code → Docs |
+| **Security Review** | `sec` | | Security expertise |
+| **Performance Issue** | `ta` | → `me` | Design analysis → Implementation |
+| **UI Component** | `uids` | → `uid` | Visual design → Code |
+| **Documentation** | `doc` | | Technical writing |
+| **Deployment** | `do` | | DevOps expertise |
+| **Architecture Decision** | `ta` | | System design |
+| **User Research** | `sd` | | Experience strategy |
+| **Copy/Messaging** | `cw` | | Content writing |
+
+### Scenario-Based Agent Selection
+
+| Scenario | Start With | Reasoning |
+|----------|------------|-----------|
+| "Users can't login" | `/protocol` (DEFECT) → `@agent-qa` | Needs reproduction and diagnosis |
+| "Add dark mode" | `/protocol` (EXPERIENCE) → `@agent-sd` | Experience change requires journey analysis |
+| "Optimize database queries" | `/protocol` (FEATURE) → `@agent-ta` | Architecture-level optimization |
+| "Deploy to production" | `/protocol` (DEVOPS) → `@agent-do` | Infrastructure task |
+| "Security audit" | `/protocol` (SECURITY) → `@agent-sec` | Security expertise required |
+| "Write API docs" | `/protocol` (DOCUMENTATION) → `@agent-doc` | Documentation specialist |
+| "Refactor auth module" | `/protocol` (ARCHITECTURE) → `@agent-ta` | Design decision needed |
+| "Fix button alignment" | `/protocol` (DEFECT) → `@agent-uid` | UI implementation fix |
+
+---
+
+## Extension vs Override vs Skills
+
+### Extension Type Decision Tree
+
+```
+Do you need to customize agent behavior?
+├─ NO → Use base agents as-is
+│
+└─ YES → Do you want to replace the entire agent?
+         ├─ YES → Use OVERRIDE (.override.md)
+         │        Example: Completely custom methodology
+         │
+         └─ NO → Do you want to add/enhance sections?
+                  ├─ YES → Use EXTENSION (.extension.md)
+                  │        Example: Add checklists, templates
+                  │
+                  └─ NO → Do you just need to inject skills?
+                           └─ Use SKILLS (.skills.json)
+                                Example: Company-specific tools
+```
+
+### Extension Type Comparison
+
+| Goal | Extension Type | File Pattern | Scope | Difficulty |
+|------|----------------|--------------|-------|------------|
+| Add company checklist | `extension` | `agent.extension.md` | Section merge | Easy |
+| Replace methodology | `override` | `agent.override.md` | Full replacement | Hard |
+| Inject team tools | `skills` | `agent.skills.json` | Skill list only | Medium |
+| Enhance templates | `extension` | `agent.extension.md` | Section merge | Easy |
+| Custom process flow | `override` | `agent.override.md` | Full replacement | Hard |
+| Add domain knowledge | `skills` | `agent.skills.json` | Skill list only | Medium |
+
+---
+
+## Work Session Decisions
+
+### Starting Work Decision Matrix
+
+| Situation | Use | Why |
+|-----------|-----|-----|
+| Brand new task | `/protocol` | Classify and route to expert |
+| Continuing yesterday's work | `/continue` | Load context from memory |
+| Quick question | Just ask | No need for protocol |
+| Exploring ideas | Just ask | Protocol is for execution |
+| Complex multi-step task | `/protocol` | Agent expertise needed |
+| Resume after interruption | `/continue` | Context restoration |
+
+### Protocol vs Direct Conversation
+
+| Use /protocol When... | Use Direct Conversation When... |
+|----------------------|--------------------------------|
+| Building a feature | Asking a question |
+| Fixing a bug | Exploring ideas |
+| Making architecture changes | Getting quick help |
+| Need expert guidance | Simple task |
+| Multi-step process | Single action |
+| Want structured approach | Want flexibility |
+
+---
+
+## Knowledge Repository Decisions
+
+### When to Create Knowledge Repository
+
+| Indicator | Action |
+|-----------|--------|
+| Team > 1 person | Create knowledge repo |
+| Company has style guide | Document in knowledge repo |
+| Custom methodologies | Create agent extensions |
+| Repeated explanations | Document once in knowledge |
+| Onboarding takes days | Create knowledge repo |
+| Inconsistent outputs | Define standards in knowledge |
+
+### Knowledge vs Skills vs Memory
+
+| Type of Information | Store In | Why |
+|---------------------|----------|-----|
+| Company values | Knowledge | Permanent, team-wide |
+| Voice/tone guidelines | Knowledge | Permanent, team-wide |
+| Design system | Knowledge | Permanent, team-wide |
+| Reusable code patterns | Skills | On-demand, reusable |
+| Project decisions | Memory | Project-specific, temporal |
+| Lessons learned | Memory | Project-specific, evolving |
+| API standards | Knowledge | Team standard |
+| Deployment process | Skills | Reusable workflow |
+| Why we chose X | Memory | Project context |
+
+---
+
+## Troubleshooting Decisions
+
+### When Something Goes Wrong
+
+| Problem | Check First | Then Try | Last Resort |
+|---------|-------------|----------|-------------|
+| Command not found | Machine setup complete? | `/setup` in `~/.claude/copilot` | Reinstall |
+| MCP not connecting | `.mcp.json` paths absolute? | Rebuild servers | Check Node version |
+| Agent not routing | Is task description clear? | Rephrase request | Use agent directly |
+| Memory not persisting | `WORKSPACE_ID` set? | Check `.mcp.json` | Rebuild memory server |
+| Knowledge not found | Symlink exists? | `/knowledge-copilot` | Manual link |
+| Skills not loading | Skills server running? | `/mcp` to verify | Check logs |
+
+---
+
+## Quick Reference Tables
+
+### Installation Decision Matrix
+
+| You Are... | Steps Required | Commands to Run |
+|------------|----------------|-----------------|
+| New solo user | Clone → Setup → Project | `/setup` → `/setup-project` |
+| New team member | Clone → Setup → Link Knowledge → Project | `/setup` → `/knowledge-copilot` → `/setup-project` |
+| Existing user, new project | Project setup only | `/setup-project` |
+| Updating framework | Update → Rebuild → Sync projects | `/update-copilot` → `/update-project` |
+
+### Daily Workflow Matrix
+
+| Beginning of Day | During Day | End of Day |
+|------------------|------------|------------|
+| `/continue` to resume | Work naturally with agents | `initiative_update` to save progress |
+| Or `/protocol` for new task | Route complex work to specialists | Document decisions in memory |
+| Check `/mcp` if needed | Use skills as needed | Note lessons learned |
+
+---
+
+## Best Practices Summary
+
+### Do This
+
+| Context | Best Practice |
+|---------|--------------|
+| Starting work | Use `/continue` to load context |
+| Complex tasks | Use `/protocol` to engage experts |
+| Team standards | Create knowledge repository |
+| Reusable patterns | Save as skills |
+| Project decisions | Store in memory with context |
+| End of session | Update initiative with progress |
+
+### Don't Do This
+
+| Anti-Pattern | Instead Do |
+|--------------|-----------|
+| Hardcode paths in extensions | Use relative paths |
+| Store secrets in knowledge | Use environment variables |
+| Override agents unnecessarily | Use extensions first |
+| Skip memory updates | Update at end of session |
+| Create skills for one-offs | Just solve the problem |
+| Ignore agent routing | Trust the protocol |
+
+---
+
+## Decision Flowchart: Complete Setup
+
+```
+START: Do you have Claude Copilot installed?
+│
+├─ NO → Clone to ~/.claude/copilot
+│       ↓
+│       Run /setup in ~/.claude/copilot
+│       ↓
+│       Are you part of a team?
+│       ├─ YES → Clone team knowledge repo
+│       │        Run /knowledge-copilot to link
+│       │        ↓
+│       └─ NO → Do you want to create team knowledge?
+│                ├─ YES → Run /knowledge-copilot
+│                └─ NO → Skip knowledge setup
+│       ↓
+│       Run /setup-project in your project
+│       ↓
+│       Done! Use /protocol to start working
+│
+└─ YES → Is this a new project?
+         ├─ YES → Run /setup-project
+         │        ↓
+         │        Done! Use /protocol to start working
+         │
+         └─ NO → Do you need to update?
+                  ├─ YES → Run /update-project
+                  └─ NO → Just use /protocol or /continue
+```
+
+---
+
+## Related Documentation
+
+| Topic | Document |
+|-------|----------|
+| Complete setup walkthrough | [USER-JOURNEY.md](USER-JOURNEY.md) |
+| Extension specifications | [EXTENSION-SPEC.md](EXTENSION-SPEC.md) |
+| Agent details | [AGENTS.md](AGENTS.md) |
+| Configuration options | [CONFIGURATION.md](CONFIGURATION.md) |
+| Customization guide | [CUSTOMIZATION.md](CUSTOMIZATION.md) |

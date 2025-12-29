@@ -37,6 +37,102 @@ You are starting a new conversation. **The Agent-First Protocol is now active.**
 | TECHNICAL | architecture, refactor, API, backend | @agent-ta |
 | QUESTION | how does, where is, explain | none |
 
+## Agent Routing
+
+When agents need to hand off work to other specialists:
+
+| From | To | When |
+|------|-----|------|
+| Any | @agent-ta | Architecture decisions, system design, PRD-to-tasks |
+| Any | @agent-sec | Security review, threat modeling, vulnerability analysis |
+| Any | @agent-me | Code implementation, bug fixes, refactoring |
+| Any | @agent-qa | Testing strategy, test coverage, bug verification |
+| Any | @agent-doc | Documentation, API docs, guides |
+| Any | @agent-do | CI/CD, deployment, infrastructure |
+| @agent-sd | @agent-uxd | After journey mapping, for interaction design |
+| @agent-uxd | @agent-uids | After wireframes, for visual design |
+| @agent-uids | @agent-uid | After visual design, for component implementation |
+| @agent-uxd | @agent-cw | Content strategy, microcopy |
+| Any | @agent-cw | Marketing copy, user-facing content |
+
+## Task Copilot Integration
+
+Use Task Copilot to manage work and minimize context usage.
+
+### Starting Work
+
+When beginning a new initiative or major task:
+
+1. **Check for existing initiative:**
+   ```
+   initiative_get() → Memory Copilot
+   progress_summary() → Task Copilot
+   ```
+
+2. **Create PRD if needed:**
+   ```
+   prd_create({ title, description, content })
+   ```
+
+3. **Create tasks from PRD:**
+   ```
+   task_create({ title, prdId, assignedAgent, metadata: { phase, complexity } })
+   ```
+
+4. **Link initiative:**
+   ```
+   initiative_link({ initiativeId, title })
+   initiative_update({ taskCopilotLinked: true, activePrdIds: [prdId] })
+   ```
+
+### Routing to Agents
+
+When invoking an agent for a task:
+
+1. **Pass the task ID:**
+   ```
+   [PROTOCOL: TECHNICAL | Agent: @agent-ta | Action: INVOKING]
+
+   Please complete TASK-xxx: <brief description>
+   ```
+
+2. **Agent will:**
+   - Retrieve task details from Task Copilot
+   - Store work product in Task Copilot
+   - Return minimal summary (~100 tokens)
+
+3. **You receive:**
+   ```
+   Task Complete: TASK-xxx
+   Work Product: WP-xxx (technical_design, 842 words)
+   Summary: <2-3 sentences>
+   Next Steps: <what to do next>
+   ```
+
+### Progress Checks
+
+Use `progress_summary()` for compact status (~200 tokens):
+- PRD counts (total, active, completed)
+- Task breakdown by status
+- Work products by type
+- Recent activity
+
+**Do NOT load full task lists into context.**
+
+### End of Session
+
+Update Memory Copilot with slim context:
+```
+initiative_update({
+  currentFocus: "Phase 2 implementation",  // 100 chars max
+  nextAction: "Continue with TASK-xxx",     // 100 chars max
+  decisions: [...],  // Strategic decisions only
+  lessons: [...]     // Key learnings only
+})
+```
+
+**Do NOT store task lists in Memory Copilot** - they live in Task Copilot.
+
 ## Extension Resolution
 
 Before invoking any agent, check for knowledge repository extensions:
