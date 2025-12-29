@@ -1,0 +1,296 @@
+/**
+ * Initiative integration tool implementations
+ */
+
+import { v4 as uuidv4 } from 'uuid';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import type { DatabaseClient } from '../database.js';
+import type {
+  InitiativeLinkInput,
+  InitiativeLinkOutput,
+  InitiativeArchiveInput,
+  InitiativeArchiveOutput,
+  InitiativeWipeInput,
+  InitiativeWipeOutput,
+  ProgressSummaryInput,
+  ProgressSummaryOutput,
+} from '../types.js';
+
+/**
+ * Link current initiative from Memory Copilot to Task Copilot workspace
+ */
+export function initiativeLink(
+  db: DatabaseClient,
+  input: InitiativeLinkInput
+): InitiativeLinkOutput {
+  const now = new Date().toISOString();
+
+  // Check if initiative already exists
+  const existing = db.getInitiative(input.initiativeId);
+  const workspaceCreated = !existing;
+
+  // Upsert the initiative
+  db.upsertInitiative({
+    id: input.initiativeId,
+    title: input.title,
+    description: input.description || null,
+    created_at: existing?.created_at || now,
+    updated_at: now
+  });
+
+  // Log activity
+  db.insertActivity({
+    id: uuidv4(),
+    initiative_id: input.initiativeId,
+    type: workspaceCreated ? 'initiative_created' : 'initiative_updated',
+    entity_id: input.initiativeId,
+    summary: workspaceCreated
+      ? `Linked initiative: ${input.title}`
+      : `Updated initiative: ${input.title}`,
+    created_at: now
+  });
+
+  return {
+    initiativeId: input.initiativeId,
+    workspaceCreated,
+    dbPath: db.getWorkspaceId()
+  };
+}
+
+/**
+ * Archive all task data for an initiative to a JSON file
+ */
+export function initiativeArchive(
+  db: DatabaseClient,
+  input: InitiativeArchiveInput
+): InitiativeArchiveOutput {
+  // Get initiative
+  const initiative = input.initiativeId
+    ? db.getInitiative(input.initiativeId)
+    : db.getCurrentInitiative();
+
+  if (!initiative) {
+    throw new Error('No initiative found to archive');
+  }
+
+  // Fetch all data
+  const prds = db.listPrds({ initiativeId: initiative.id });
+  const allTasks = db.listTasks({});
+  const allWorkProducts: any[] = [];
+  const allActivityLogs = db.listActivityLogs(initiative.id);
+
+  // Get work products for all tasks
+  for (const task of allTasks) {
+    const workProducts = db.listWorkProducts(task.id);
+    allWorkProducts.push(...workProducts);
+  }
+
+  // Create archive data
+  const archiveData = {
+    version: '1.0',
+    archivedAt: new Date().toISOString(),
+    initiative: {
+      id: initiative.id,
+      title: initiative.title,
+      description: initiative.description
+    },
+    prds: prds.map(prd => ({
+      id: prd.id,
+      initiativeId: prd.initiative_id,
+      title: prd.title,
+      description: prd.description,
+      content: prd.content,
+      metadata: JSON.parse(prd.metadata),
+      status: prd.status,
+      createdAt: prd.created_at,
+      updatedAt: prd.updated_at
+    })),
+    tasks: allTasks.map(task => ({
+      id: task.id,
+      prdId: task.prd_id,
+      parentId: task.parent_id,
+      title: task.title,
+      description: task.description,
+      assignedAgent: task.assigned_agent,
+      status: task.status,
+      blockedReason: task.blocked_reason,
+      notes: task.notes,
+      metadata: JSON.parse(task.metadata),
+      createdAt: task.created_at,
+      updatedAt: task.updated_at
+    })),
+    workProducts: allWorkProducts.map(wp => ({
+      id: wp.id,
+      taskId: wp.task_id,
+      type: wp.type,
+      title: wp.title,
+      content: wp.content,
+      metadata: JSON.parse(wp.metadata),
+      createdAt: wp.created_at
+    })),
+    activityLog: allActivityLogs.map(log => ({
+      id: log.id,
+      initiativeId: log.initiative_id,
+      type: log.type,
+      entityId: log.entity_id,
+      summary: log.summary,
+      createdAt: log.created_at
+    }))
+  };
+
+  // Determine archive path
+  const archivePath = input.archivePath || (() => {
+    const archiveDir = join(homedir(), '.claude', 'archives');
+    if (!existsSync(archiveDir)) {
+      mkdirSync(archiveDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    return join(archiveDir, `${initiative.id}_${timestamp}.json`);
+  })();
+
+  // Ensure archive directory exists
+  const archiveDir = archivePath.substring(0, archivePath.lastIndexOf('/'));
+  if (!existsSync(archiveDir)) {
+    mkdirSync(archiveDir, { recursive: true });
+  }
+
+  // Write archive file
+  writeFileSync(archivePath, JSON.stringify(archiveData, null, 2), 'utf-8');
+
+  // Log activity
+  db.insertActivity({
+    id: uuidv4(),
+    initiative_id: initiative.id,
+    type: 'initiative_archived',
+    entity_id: initiative.id,
+    summary: `Archived initiative to: ${archivePath}`,
+    created_at: new Date().toISOString()
+  });
+
+  return {
+    initiativeId: initiative.id,
+    archivePath,
+    prdCount: prds.length,
+    taskCount: allTasks.length,
+    workProductCount: allWorkProducts.length,
+    archivedAt: archiveData.archivedAt
+  };
+}
+
+/**
+ * Delete all task data for an initiative (fresh start)
+ */
+export function initiativeWipe(
+  db: DatabaseClient,
+  input: InitiativeWipeInput
+): InitiativeWipeOutput {
+  // Safety check
+  if (!input.confirm) {
+    throw new Error('Wipe operation requires confirm: true');
+  }
+
+  // Get initiative
+  const initiative = input.initiativeId
+    ? db.getInitiative(input.initiativeId)
+    : db.getCurrentInitiative();
+
+  if (!initiative) {
+    throw new Error('No initiative found to wipe');
+  }
+
+  // Delete all data for this initiative
+  const deletedCounts = db.wipeInitiativeData(initiative.id);
+
+  // Log activity
+  db.insertActivity({
+    id: uuidv4(),
+    initiative_id: initiative.id,
+    type: 'initiative_wiped',
+    entity_id: initiative.id,
+    summary: `Wiped all data for initiative: ${initiative.title}`,
+    created_at: new Date().toISOString()
+  });
+
+  return {
+    initiativeId: initiative.id,
+    deletedPrds: deletedCounts.prds,
+    deletedTasks: deletedCounts.tasks,
+    deletedWorkProducts: deletedCounts.workProducts,
+    deletedActivityLogs: deletedCounts.activityLogs
+  };
+}
+
+/**
+ * Get high-level progress summary for initiative
+ */
+export function progressSummary(
+  db: DatabaseClient,
+  input: ProgressSummaryInput
+): ProgressSummaryOutput {
+  // Get initiative
+  const initiative = input.initiativeId
+    ? db.getInitiative(input.initiativeId)
+    : db.getCurrentInitiative();
+
+  if (!initiative) {
+    throw new Error('No initiative found');
+  }
+
+  // Get PRD stats
+  const prds = db.listPrds({ initiativeId: initiative.id });
+  const activePrds = prds.filter(p => p.status === 'active');
+  const completedPrds = prds.filter(p => p.status === 'archived');
+
+  // Get task stats
+  const allTasks = db.listTasks({});
+  const tasksByStatus = {
+    pending: allTasks.filter(t => t.status === 'pending').length,
+    inProgress: allTasks.filter(t => t.status === 'in_progress').length,
+    completed: allTasks.filter(t => t.status === 'completed').length,
+    blocked: allTasks.filter(t => t.status === 'blocked').length
+  };
+
+  // Get work product stats
+  const workProductsByType: Record<string, number> = {};
+  let totalWorkProducts = 0;
+
+  for (const task of allTasks) {
+    const workProducts = db.listWorkProducts(task.id);
+    totalWorkProducts += workProducts.length;
+
+    for (const wp of workProducts) {
+      workProductsByType[wp.type] = (workProductsByType[wp.type] || 0) + 1;
+    }
+  }
+
+  // Get recent activity (last 5 items)
+  const recentActivity = db.listActivityLogs(initiative.id, 5).map(log => ({
+    timestamp: log.created_at,
+    type: log.type,
+    summary: log.summary
+  }));
+
+  return {
+    initiativeId: initiative.id,
+    title: initiative.title,
+    prds: {
+      total: prds.length,
+      active: activePrds.length,
+      completed: completedPrds.length
+    },
+    tasks: {
+      total: allTasks.length,
+      pending: tasksByStatus.pending,
+      inProgress: tasksByStatus.inProgress,
+      completed: tasksByStatus.completed,
+      blocked: tasksByStatus.blocked
+    },
+    workProducts: {
+      total: totalWorkProducts,
+      byType: workProductsByType
+    },
+    recentActivity
+  };
+}
