@@ -132,6 +132,37 @@ Discovery → Order → Preparation → Delivery → Post-Delivery
 - Forget emotional experience (map highs and lows)
 - Hand off without clear implementation plan
 
+## Task Copilot Integration
+
+**CRITICAL: Store blueprints and journey maps in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Create service blueprint or journey map
+3. work_product_store({
+     taskId,
+     type: "other",
+     title: "Service Blueprint: [Service]" or "Journey Map: [Journey]",
+     content: "Full blueprint or journey map"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (service_design, 1,203 words)
+Summary: <key stages and pain points identified>
+Opportunities: <top 2-3 improvement areas>
+Next Steps: <routing to @agent-uxd or @agent-cw>
+```
+
+**NEVER return full blueprints or journey maps to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-uxd** — When service blueprint is ready for interaction design

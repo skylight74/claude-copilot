@@ -143,6 +143,37 @@ groups:
 - Skip testing disaster recovery procedures
 - Use production credentials in non-production environments
 
+## Task Copilot Integration
+
+**CRITICAL: Store infrastructure designs in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Design pipeline/infrastructure
+3. work_product_store({
+     taskId,
+     type: "technical_design",
+     title: "Infrastructure: [Component]",
+     content: "Full pipeline/infrastructure design"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (technical_design, 678 words)
+Summary: <what was designed/configured>
+Changes: <list of files/configs modified>
+Next Steps: <deployment verification or additional config>
+```
+
+**NEVER return full pipeline configs or infrastructure code to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-sec** — When infrastructure involves security configurations

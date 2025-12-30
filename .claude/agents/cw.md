@@ -131,6 +131,37 @@ Structure: [What happened] + [How to fix it]
 - Write without understanding context
 - Use passive voice when active is clearer
 
+## Task Copilot Integration
+
+**CRITICAL: Store copy specifications in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Write copy specifications
+3. work_product_store({
+     taskId,
+     type: "other",
+     title: "Copy: [Feature/Screen]",
+     content: "Full copy specification with all labels, messages, etc."
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (copy, 423 words)
+Summary: <screens and elements covered>
+Key Decisions: <voice/tone choices made>
+Next Steps: <routing to @agent-uxd if UX issues>
+```
+
+**NEVER return full copy specifications to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-uxd** — When copy reveals UX flow issues

@@ -8,17 +8,61 @@ import type {
   WorkProductStoreInput,
   WorkProductGetInput,
   WorkProductListInput,
-  WorkProductRow
+  WorkProductRow,
+  ValidationResult,
 } from '../types.js';
+import { getValidator } from '../validation/index.js';
+
+export interface WorkProductStoreResult {
+  id: string;
+  taskId: string;
+  summary: string;
+  wordCount: number;
+  createdAt: string;
+  validation?: {
+    valid: boolean;
+    flagCount: number;
+    warnings: string[];
+    rejected: boolean;
+    feedback?: string;
+  };
+}
 
 export async function workProductStore(
   db: DatabaseClient,
   input: WorkProductStoreInput
-): Promise<{ id: string; taskId: string; summary: string; wordCount: number; createdAt: string }> {
+): Promise<WorkProductStoreResult> {
   const now = new Date().toISOString();
   const id = `WP-${uuidv4()}`;
 
-  const metadata = input.metadata || {};
+  // Run validation
+  const validator = getValidator();
+  const task = db.getTask(input.taskId);
+  const validationResult = validator.validate(
+    input.content,
+    input.type,
+    task?.assigned_agent || undefined
+  );
+
+  // Handle rejection (if any rules have severity: 'reject')
+  if (validationResult.rejected) {
+    throw new Error(
+      `Work product rejected by validation:\n${validationResult.actionableFeedback}`
+    );
+  }
+
+  // Prepare metadata with validation flags if any warnings
+  const baseMetadata = input.metadata || {};
+  const metadata = validationResult.valid
+    ? baseMetadata
+    : {
+        ...baseMetadata,
+        validation: {
+          flags: validationResult.flags,
+          validatedAt: now,
+        },
+      };
+
   const wp: WorkProductRow = {
     id,
     task_id: input.taskId,
@@ -32,16 +76,18 @@ export async function workProductStore(
   db.insertWorkProduct(wp);
 
   // Log activity (need initiative ID from task -> PRD)
-  const task = db.getTask(input.taskId);
   if (task?.prd_id) {
     const prd = db.getPrd(task.prd_id);
     if (prd) {
+      const flagSuffix = validationResult.flags.length > 0
+        ? ` (${validationResult.flags.length} warnings)`
+        : '';
       db.insertActivity({
         id: uuidv4(),
         initiative_id: prd.initiative_id,
         type: 'work_product_created',
         entity_id: id,
-        summary: `Created ${input.type}: ${input.title}`,
+        summary: `Created ${input.type}: ${input.title}${flagSuffix}`,
         created_at: now
       });
     }
@@ -51,13 +97,26 @@ export async function workProductStore(
   const summary = input.content.substring(0, 300) + (input.content.length > 300 ? '...' : '');
   const wordCount = input.content.split(/\s+/).filter(w => w.length > 0).length;
 
-  return {
+  const result: WorkProductStoreResult = {
     id,
     taskId: input.taskId,
     summary,
     wordCount,
-    createdAt: now
+    createdAt: now,
   };
+
+  // Include validation info if there were warnings
+  if (!validationResult.valid) {
+    result.validation = {
+      valid: validationResult.valid,
+      flagCount: validationResult.flags.length,
+      warnings: validationResult.flags.map(f => f.message),
+      rejected: validationResult.rejected,
+      feedback: validationResult.actionableFeedback,
+    };
+  }
+
+  return result;
 }
 
 export function workProductGet(

@@ -10,7 +10,10 @@ import type {
   TaskGetInput,
   TaskListInput,
   TaskRow,
-  TaskStatus
+  TaskStatus,
+  PerformanceRow,
+  PerformanceOutcome,
+  CheckpointTrigger,
 } from '../types.js';
 
 export async function taskCreate(
@@ -101,11 +104,22 @@ export function taskUpdate(
     updates.metadata = JSON.stringify(mergedMetadata);
   }
 
+  // Track agent reassignment before update (for performance tracking)
+  const previousAgent = task.assigned_agent;
+  const isReassignment = input.assignedAgent !== undefined &&
+    input.assignedAgent !== previousAgent &&
+    previousAgent !== null;
+
   db.updateTask(input.id, updates);
 
-  // Log activity if status changed
+  // Record performance on agent reassignment
+  if (isReassignment && previousAgent) {
+    recordPerformance(db, task, 'reassigned', now);
+  }
+
+  // Handle status changes
   if (input.status && input.status !== task.status) {
-    // Get initiative ID from PRD
+    // Log activity
     if (task.prd_id) {
       const prd = db.getPrd(task.prd_id);
       if (prd) {
@@ -119,6 +133,20 @@ export function taskUpdate(
         });
       }
     }
+
+    // Record performance based on status transition
+    if (input.status === 'completed' && task.assigned_agent) {
+      recordPerformance(db, task, 'success', now);
+    } else if (input.status === 'blocked' && task.assigned_agent) {
+      recordPerformance(db, task, 'blocked', now);
+    } else if (input.status === 'cancelled' && task.assigned_agent) {
+      recordPerformance(db, task, 'failure', now);
+    }
+
+    // Auto-checkpoint on status transitions to in_progress or blocked
+    if (input.status === 'in_progress' || input.status === 'blocked') {
+      createAutoCheckpoint(db, task, input.status === 'blocked' ? input.blockedReason : undefined, now);
+    }
   }
 
   return {
@@ -126,6 +154,98 @@ export function taskUpdate(
     status: (input.status || task.status) as TaskStatus,
     updatedAt: now
   };
+}
+
+/**
+ * Record agent performance for a task
+ */
+function recordPerformance(
+  db: DatabaseClient,
+  task: TaskRow,
+  outcome: PerformanceOutcome,
+  timestamp: string
+): void {
+  if (!task.assigned_agent) return;
+
+  // Extract work product type from task metadata or infer from work products
+  const metadata = JSON.parse(task.metadata);
+  let workProductType: string | null = metadata.workProductType || null;
+
+  // If not specified, check if task has work products and use the most recent type
+  if (!workProductType) {
+    const workProducts = db.listWorkProducts(task.id);
+    if (workProducts.length > 0) {
+      workProductType = workProducts[0].type;
+    }
+  }
+
+  const perf: PerformanceRow = {
+    id: uuidv4(),
+    agent_id: task.assigned_agent,
+    task_id: task.id,
+    work_product_type: workProductType,
+    complexity: metadata.complexity || null,
+    outcome,
+    duration_ms: null, // Could calculate from timestamps if needed
+    created_at: timestamp
+  };
+
+  db.insertPerformance(perf);
+}
+
+/**
+ * Create an automatic checkpoint for a task
+ */
+function createAutoCheckpoint(
+  db: DatabaseClient,
+  task: TaskRow,
+  blockedReason: string | undefined,
+  timestamp: string
+): void {
+  const MAX_CHECKPOINTS = 5;
+  const DEFAULT_EXPIRY_HOURS = 24;
+
+  // Get next sequence number
+  const sequence = db.getNextCheckpointSequence(task.id);
+
+  // Calculate expiry
+  const expiresAt = new Date(Date.now() + DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+
+  // Get subtask states
+  const subtasks = db.listTasks({ parentId: task.id });
+  const subtaskStates = subtasks.map(st => ({
+    id: st.id,
+    status: st.status
+  }));
+
+  // Determine trigger type
+  const trigger: CheckpointTrigger = 'auto_status';
+
+  db.insertCheckpoint({
+    id: `CP-${uuidv4()}`,
+    task_id: task.id,
+    sequence,
+    trigger,
+    task_status: task.status,
+    task_notes: task.notes,
+    task_metadata: task.metadata,
+    blocked_reason: blockedReason || task.blocked_reason,
+    assigned_agent: task.assigned_agent,
+    execution_phase: null,
+    execution_step: null,
+    agent_context: null,
+    draft_content: null,
+    draft_type: null,
+    subtask_states: JSON.stringify(subtaskStates),
+    created_at: timestamp,
+    expires_at: expiresAt
+  });
+
+  // Prune old checkpoints if exceeding max
+  const count = db.getCheckpointCount(task.id);
+  if (count > MAX_CHECKPOINTS) {
+    db.deleteOldestCheckpoints(task.id, count - MAX_CHECKPOINTS);
+  }
 }
 
 export function taskGet(

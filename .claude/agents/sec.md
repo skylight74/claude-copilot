@@ -120,6 +120,37 @@ Login endpoint, password reset, session management
 - Assume input is safe (validate everything)
 - Ignore defense in depth (single security layer insufficient)
 
+## Task Copilot Integration
+
+**CRITICAL: Store security reviews in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Perform security analysis
+3. work_product_store({
+     taskId,
+     type: "security_review",
+     title: "Security Review: [Component]",
+     content: "Full findings with severity and remediation"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (security_review, 1,102 words)
+Summary: <severity counts and critical findings>
+Action Required: <block deploy / fix in cycle / acceptable>
+Next Steps: <what needs remediation>
+```
+
+**NEVER return full security findings to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-me** — When vulnerabilities need code fixes

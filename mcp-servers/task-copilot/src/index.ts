@@ -17,6 +17,9 @@ import { prdCreate, prdGet, prdList } from './tools/prd.js';
 import { taskCreate, taskUpdate, taskGet, taskList } from './tools/task.js';
 import { workProductStore, workProductGet, workProductList } from './tools/work-product.js';
 import { initiativeLink, initiativeArchive, initiativeWipe, progressSummary } from './tools/initiative.js';
+import { agentPerformanceGet } from './tools/performance.js';
+import { checkpointCreate, checkpointGet, checkpointResume, checkpointList, checkpointCleanup } from './tools/checkpoint.js';
+import { getValidator, initValidator } from './validation/index.js';
 import type {
   PrdCreateInput,
   PrdGetInput,
@@ -32,6 +35,13 @@ import type {
   InitiativeArchiveInput,
   InitiativeWipeInput,
   ProgressSummaryInput,
+  AgentPerformanceGetInput,
+  CheckpointCreateInput,
+  CheckpointGetInput,
+  CheckpointResumeInput,
+  CheckpointListInput,
+  CheckpointCleanupInput,
+  ValidationRulesListInput,
   TaskStatus,
   PrdStatus,
   WorkProductType
@@ -280,6 +290,121 @@ const TOOLS = [
         initiativeId: { type: 'string', description: 'Initiative ID (default: current initiative)' }
       }
     }
+  },
+  // Agent Performance Tracking
+  {
+    name: 'agent_performance_get',
+    description: 'Get agent performance metrics (success rates, completion rates by task type)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string', description: 'Filter by agent ID (me, ta, qa, sec, doc, do, sd, uxd, uids, uid, cw)' },
+        workProductType: {
+          type: 'string',
+          enum: ['technical_design', 'implementation', 'test_plan', 'security_review', 'documentation', 'architecture', 'other'],
+          description: 'Filter by work product type'
+        },
+        complexity: { type: 'string', description: 'Filter by complexity (low, medium, high, very_high)' },
+        sinceDays: { type: 'number', description: 'Only include last N days (default: all)' }
+      }
+    }
+  },
+  // Checkpoint Tools
+  {
+    name: 'checkpoint_create',
+    description: 'Create a checkpoint for mid-task recovery. Use before risky operations or after completing significant steps.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to checkpoint' },
+        trigger: {
+          type: 'string',
+          enum: ['auto_status', 'auto_subtask', 'manual', 'error'],
+          description: 'Checkpoint trigger type (default: manual)'
+        },
+        executionPhase: { type: 'string', description: 'Current phase (e.g., analysis, implementation)' },
+        executionStep: { type: 'number', description: 'Step number within phase' },
+        agentContext: { type: 'object', description: 'Agent-specific state to preserve' },
+        draftContent: { type: 'string', description: 'Partial work in progress' },
+        draftType: {
+          type: 'string',
+          enum: ['technical_design', 'implementation', 'test_plan', 'security_review', 'documentation', 'architecture', 'other'],
+          description: 'Type of draft content'
+        },
+        expiresIn: { type: 'number', description: 'Minutes until checkpoint expires (default: 1440 = 24h)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'checkpoint_get',
+    description: 'Get a specific checkpoint by ID with full details',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Checkpoint ID' }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'checkpoint_resume',
+    description: 'Resume task from last checkpoint. Returns state and context for continuing work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to resume' },
+        checkpointId: { type: 'string', description: 'Specific checkpoint ID (default: latest)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'checkpoint_list',
+    description: 'List available checkpoints for a task',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID' },
+        limit: { type: 'number', description: 'Max results (default: 5)' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'checkpoint_cleanup',
+    description: 'Clean up old or expired checkpoints',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Clean specific task (omit for all)' },
+        olderThan: { type: 'number', description: 'Remove checkpoints older than N minutes' },
+        keepLatest: { type: 'number', description: 'Keep N most recent per task (default: 3)' }
+      }
+    }
+  },
+  // Validation Tools
+  {
+    name: 'validation_config_get',
+    description: 'Get current validation configuration',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'validation_rules_list',
+    description: 'List validation rules for a work product type',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['technical_design', 'implementation', 'test_plan', 'security_review', 'documentation', 'architecture', 'other'],
+          description: 'Work product type to get rules for (omit for global rules)'
+        }
+      }
+    }
   }
 ];
 
@@ -435,6 +560,105 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
 
+      // Agent Performance Tracking
+      case 'agent_performance_get': {
+        const result = agentPerformanceGet(db, {
+          agentId: a.agentId as string | undefined,
+          workProductType: a.workProductType as string | undefined,
+          complexity: a.complexity as string | undefined,
+          sinceDays: a.sinceDays as number | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      // Checkpoint Tools
+      case 'checkpoint_create': {
+        const result = checkpointCreate(db, {
+          taskId: a.taskId as string,
+          trigger: a.trigger as 'auto_status' | 'auto_subtask' | 'manual' | 'error' | undefined,
+          executionPhase: a.executionPhase as string | undefined,
+          executionStep: a.executionStep as number | undefined,
+          agentContext: a.agentContext as Record<string, unknown> | undefined,
+          draftContent: a.draftContent as string | undefined,
+          draftType: a.draftType as WorkProductType | undefined,
+          expiresIn: a.expiresIn as number | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'checkpoint_get': {
+        const result = checkpointGet(db, {
+          id: a.id as string
+        });
+        return { content: [{ type: 'text', text: result ? JSON.stringify(result, null, 2) : 'Checkpoint not found' }] };
+      }
+
+      case 'checkpoint_resume': {
+        const result = checkpointResume(db, {
+          taskId: a.taskId as string,
+          checkpointId: a.checkpointId as string | undefined
+        });
+        return { content: [{ type: 'text', text: result ? JSON.stringify(result, null, 2) : 'No checkpoint found' }] };
+      }
+
+      case 'checkpoint_list': {
+        const result = checkpointList(db, {
+          taskId: a.taskId as string,
+          limit: a.limit as number | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      case 'checkpoint_cleanup': {
+        const result = checkpointCleanup(db, {
+          taskId: a.taskId as string | undefined,
+          olderThan: a.olderThan as number | undefined,
+          keepLatest: a.keepLatest as number | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+
+      // Validation Tools
+      case 'validation_config_get': {
+        const validator = getValidator();
+        const config = validator.getConfig();
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              version: config.version,
+              defaultMode: config.defaultMode,
+              globalRulesCount: config.globalRules.length,
+              typeRules: Object.fromEntries(
+                Object.entries(config.typeRules).map(([k, v]) => [k, v.length])
+              )
+            }, null, 2)
+          }]
+        };
+      }
+
+      case 'validation_rules_list': {
+        const validator = getValidator();
+        const type = a.type as WorkProductType | undefined;
+        const rules = validator.getRulesForType(type || 'global');
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              type: type || 'global',
+              rules: rules.map(r => ({
+                id: r.id,
+                name: r.name,
+                description: r.description,
+                type: r.type,
+                severity: r.severity,
+                enabled: r.enabled
+              }))
+            }, null, 2)
+          }]
+        };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
@@ -451,6 +675,15 @@ async function main() {
     console.error(`Project: ${PROJECT_PATH}`);
     console.error(`Workspace ID: ${WORKSPACE_ID || '(auto-generated)'}`);
     console.error(`Workspace ID (actual): ${db.getWorkspaceId()}`);
+  }
+
+  // Initialize validation system
+  initValidator();
+
+  // Clean up expired checkpoints on startup
+  const expiredCount = db.deleteExpiredCheckpoints();
+  if (expiredCount > 0 && LOG_LEVEL === 'debug') {
+    console.error(`Cleaned up ${expiredCount} expired checkpoints`);
   }
 
   const transport = new StdioServerTransport();

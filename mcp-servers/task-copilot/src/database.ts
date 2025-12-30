@@ -16,6 +16,8 @@ import type {
   ActivityLogRow,
   TaskStatus,
   PrdStatus,
+  PerformanceRow,
+  CheckpointRow,
 } from './types.js';
 
 // Schema definition
@@ -94,6 +96,55 @@ CREATE INDEX IF NOT EXISTS idx_work_products_task ON work_products(task_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_initiative ON activity_log(initiative_id);
 `;
 
+// Migration SQL for version 2: Agent Performance Tracking
+const MIGRATION_V2_SQL = `
+-- agent_performance table
+CREATE TABLE IF NOT EXISTS agent_performance (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  work_product_type TEXT,
+  complexity TEXT,
+  outcome TEXT NOT NULL CHECK(outcome IN ('success', 'failure', 'blocked', 'reassigned')),
+  duration_ms INTEGER,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_perf_agent ON agent_performance(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_perf_outcome ON agent_performance(agent_id, outcome);
+CREATE INDEX IF NOT EXISTS idx_agent_perf_type ON agent_performance(agent_id, work_product_type);
+CREATE INDEX IF NOT EXISTS idx_agent_perf_created ON agent_performance(created_at DESC);
+`;
+
+// Migration SQL for version 3: Checkpoint System
+const MIGRATION_V3_SQL = `
+-- checkpoints table
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  trigger TEXT NOT NULL CHECK(trigger IN ('auto_status', 'auto_subtask', 'manual', 'error')),
+  task_status TEXT NOT NULL,
+  task_notes TEXT,
+  task_metadata TEXT,
+  blocked_reason TEXT,
+  assigned_agent TEXT,
+  execution_phase TEXT,
+  execution_step INTEGER,
+  agent_context TEXT,
+  draft_content TEXT,
+  draft_type TEXT,
+  subtask_states TEXT DEFAULT '[]',
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  FOREIGN KEY (task_id) REFERENCES tasks(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_checkpoints_task ON checkpoints(task_id, sequence DESC);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_expires ON checkpoints(expires_at);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -101,7 +152,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 3;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -142,13 +193,29 @@ export class DatabaseClient {
     const row = this.db.prepare('SELECT MAX(version) as version FROM migrations').get() as { version: number | null };
     const currentVersion = row?.version || 0;
 
-    if (currentVersion < CURRENT_VERSION) {
-      // Run schema
+    // Run initial schema (version 1)
+    if (currentVersion < 1) {
       this.db.exec(SCHEMA_SQL);
-
-      // Record migration
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
-        CURRENT_VERSION,
+        1,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v2: Agent Performance Tracking
+    if (currentVersion < 2) {
+      this.db.exec(MIGRATION_V2_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        2,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v3: Checkpoint System
+    if (currentVersion < 3) {
+      this.db.exec(MIGRATION_V3_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        3,
         new Date().toISOString()
       );
     }
@@ -453,6 +520,185 @@ export class DatabaseClient {
       completedTasks,
       workProductCount
     };
+  }
+
+  // ============================================================================
+  // AGENT PERFORMANCE TRACKING
+  // ============================================================================
+
+  insertPerformance(perf: PerformanceRow): void {
+    this.db.prepare(`
+      INSERT INTO agent_performance (id, agent_id, task_id, work_product_type, complexity, outcome, duration_ms, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      perf.id,
+      perf.agent_id,
+      perf.task_id,
+      perf.work_product_type,
+      perf.complexity,
+      perf.outcome,
+      perf.duration_ms,
+      perf.created_at
+    );
+  }
+
+  getPerformanceRecords(options: {
+    agentId?: string;
+    workProductType?: string;
+    complexity?: string;
+    sinceDays?: number;
+  }): PerformanceRow[] {
+    let sql = 'SELECT * FROM agent_performance WHERE 1=1';
+    const params: unknown[] = [];
+
+    if (options.agentId) {
+      sql += ' AND agent_id = ?';
+      params.push(options.agentId);
+    }
+
+    if (options.workProductType) {
+      sql += ' AND work_product_type = ?';
+      params.push(options.workProductType);
+    }
+
+    if (options.complexity) {
+      sql += ' AND complexity = ?';
+      params.push(options.complexity);
+    }
+
+    if (options.sinceDays) {
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - options.sinceDays);
+      sql += ' AND created_at >= ?';
+      params.push(sinceDate.toISOString());
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    return this.db.prepare(sql).all(...params) as PerformanceRow[];
+  }
+
+  getPerformanceStats(): {
+    totalRecords: number;
+    oldestRecord: string | null;
+    newestRecord: string | null;
+  } {
+    const count = (this.db.prepare('SELECT COUNT(*) as count FROM agent_performance').get() as { count: number }).count;
+    const oldest = this.db.prepare('SELECT MIN(created_at) as oldest FROM agent_performance').get() as { oldest: string | null };
+    const newest = this.db.prepare('SELECT MAX(created_at) as newest FROM agent_performance').get() as { newest: string | null };
+
+    return {
+      totalRecords: count,
+      oldestRecord: oldest.oldest,
+      newestRecord: newest.newest
+    };
+  }
+
+  // ============================================================================
+  // CHECKPOINT SYSTEM
+  // ============================================================================
+
+  insertCheckpoint(checkpoint: CheckpointRow): void {
+    this.db.prepare(`
+      INSERT INTO checkpoints (
+        id, task_id, sequence, trigger, task_status, task_notes, task_metadata,
+        blocked_reason, assigned_agent, execution_phase, execution_step,
+        agent_context, draft_content, draft_type, subtask_states, created_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      checkpoint.id,
+      checkpoint.task_id,
+      checkpoint.sequence,
+      checkpoint.trigger,
+      checkpoint.task_status,
+      checkpoint.task_notes,
+      checkpoint.task_metadata,
+      checkpoint.blocked_reason,
+      checkpoint.assigned_agent,
+      checkpoint.execution_phase,
+      checkpoint.execution_step,
+      checkpoint.agent_context,
+      checkpoint.draft_content,
+      checkpoint.draft_type,
+      checkpoint.subtask_states,
+      checkpoint.created_at,
+      checkpoint.expires_at
+    );
+  }
+
+  getCheckpoint(id: string): CheckpointRow | undefined {
+    return this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(id) as CheckpointRow | undefined;
+  }
+
+  getLatestCheckpoint(taskId: string): CheckpointRow | undefined {
+    return this.db.prepare(
+      'SELECT * FROM checkpoints WHERE task_id = ? ORDER BY sequence DESC LIMIT 1'
+    ).get(taskId) as CheckpointRow | undefined;
+  }
+
+  listCheckpoints(taskId: string, limit?: number): CheckpointRow[] {
+    const sql = `SELECT * FROM checkpoints WHERE task_id = ? ORDER BY sequence DESC ${limit ? `LIMIT ${limit}` : ''}`;
+    return this.db.prepare(sql).all(taskId) as CheckpointRow[];
+  }
+
+  getNextCheckpointSequence(taskId: string): number {
+    const result = this.db.prepare(
+      'SELECT MAX(sequence) as maxSeq FROM checkpoints WHERE task_id = ?'
+    ).get(taskId) as { maxSeq: number | null };
+    return (result.maxSeq || 0) + 1;
+  }
+
+  getCheckpointCount(taskId: string): number {
+    const result = this.db.prepare(
+      'SELECT COUNT(*) as count FROM checkpoints WHERE task_id = ?'
+    ).get(taskId) as { count: number };
+    return result.count;
+  }
+
+  deleteOldestCheckpoints(taskId: string, count: number): number {
+    // Delete the oldest 'count' checkpoints for a task
+    const result = this.db.prepare(`
+      DELETE FROM checkpoints
+      WHERE id IN (
+        SELECT id FROM checkpoints
+        WHERE task_id = ?
+        ORDER BY sequence ASC
+        LIMIT ?
+      )
+    `).run(taskId, count);
+    return result.changes;
+  }
+
+  deleteExpiredCheckpoints(): number {
+    const now = new Date().toISOString();
+    const result = this.db.prepare(
+      'DELETE FROM checkpoints WHERE expires_at IS NOT NULL AND expires_at < ?'
+    ).run(now);
+    return result.changes;
+  }
+
+  deleteCheckpointsForTask(taskId: string): number {
+    const result = this.db.prepare('DELETE FROM checkpoints WHERE task_id = ?').run(taskId);
+    return result.changes;
+  }
+
+  deleteCheckpointsOlderThan(minutes: number, taskId?: string): number {
+    const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString();
+    let sql = 'DELETE FROM checkpoints WHERE created_at < ?';
+    const params: unknown[] = [cutoff];
+
+    if (taskId) {
+      sql += ' AND task_id = ?';
+      params.push(taskId);
+    }
+
+    const result = this.db.prepare(sql).run(...params);
+    return result.changes;
+  }
+
+  getTotalCheckpointCount(): number {
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM checkpoints').get() as { count: number };
+    return result.count;
   }
 
   close(): void {

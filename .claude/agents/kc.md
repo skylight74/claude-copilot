@@ -161,6 +161,38 @@ git push origin main
 4. **Standards** — Development, design, operations processes
 5. **Extensions** — Custom agent behaviors (optional)
 
+## Task Copilot Integration
+
+**CRITICAL: Store discovery findings in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Conduct discovery session
+3. work_product_store({
+     taskId,
+     type: "other",
+     title: "Discovery: [Phase Name]",
+     content: "Full discovery session notes and documentation"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+5. initiative_update({ ... }) — Store progress for next session
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (discovery, 1,102 words)
+Summary: <phase completed, key insights>
+Files Created: <list of knowledge files>
+Next Session: <next phase to continue>
+```
+
+**NEVER return full discovery notes to the main session.**
+
 ## Route To Other Agent
 
 - Knowledge Copilot typically runs standalone as a discovery/setup agent

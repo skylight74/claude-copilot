@@ -75,6 +75,36 @@ Prerequisites: Phase 1
 - Database migration: Test rollback scenario in staging first
 ```
 
+## Task Copilot Integration
+
+**CRITICAL: Store all detailed output in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details and context
+2. Do your analysis and design work
+3. work_product_store({
+     taskId,
+     type: "architecture" or "technical_design",
+     title: "Descriptive title",
+     content: "Full detailed output"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (architecture, 1,247 words)
+Summary: <2-3 sentences describing what was designed>
+Next Steps: <what agent should be invoked next>
+```
+
+**NEVER return full designs, plans, or detailed analysis to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-me** — When architecture is defined and ready for implementation

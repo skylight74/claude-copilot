@@ -76,6 +76,37 @@ Authentication flow from login form to dashboard
 - E2E: Successful login, failed login recovery
 ```
 
+## Task Copilot Integration
+
+**CRITICAL: Store test plans and findings in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Analyze code and design test strategy
+3. work_product_store({
+     taskId,
+     type: "test_plan",
+     title: "Test Plan: [Feature]",
+     content: "Full test plan with test cases"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (test_plan, 892 words)
+Summary: <2-3 sentences describing test coverage>
+Coverage: <key areas covered>
+Next Steps: <what to implement or verify>
+```
+
+**NEVER return full test plans or test case details to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-me** — When tests reveal code bugs that need fixing

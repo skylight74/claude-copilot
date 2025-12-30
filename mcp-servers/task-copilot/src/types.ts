@@ -255,3 +255,225 @@ export interface ProgressSummaryOutput {
     summary: string;
   }>;
 }
+
+// ============================================================================
+// AGENT PERFORMANCE TRACKING TYPES
+// ============================================================================
+
+export type PerformanceOutcome = 'success' | 'failure' | 'blocked' | 'reassigned';
+
+export interface PerformanceRow {
+  id: string;
+  agent_id: string;
+  task_id: string;
+  work_product_type: string | null;
+  complexity: string | null;
+  outcome: string;
+  duration_ms: number | null;
+  created_at: string;
+}
+
+export interface AgentPerformanceGetInput {
+  agentId?: string;
+  workProductType?: string;
+  complexity?: string;
+  sinceDays?: number;
+}
+
+export interface AgentMetrics {
+  total: number;
+  success: number;
+  failure: number;
+  blocked: number;
+  reassigned: number;
+  successRate: number;
+  completionRate: number;
+}
+
+export interface AgentPerformanceResult {
+  agentId: string;
+  metrics: AgentMetrics;
+  byType: Record<string, { total: number; successRate: number }>;
+  byComplexity: Record<string, { total: number; successRate: number }>;
+  recentTrend: 'improving' | 'stable' | 'declining' | 'insufficient_data';
+}
+
+export interface AgentPerformanceGetOutput {
+  agents: AgentPerformanceResult[];
+  summary: {
+    totalRecords: number;
+    periodStart: string | null;
+    periodEnd: string | null;
+  };
+}
+
+// ============================================================================
+// CHECKPOINT TYPES
+// ============================================================================
+
+export type CheckpointTrigger = 'auto_status' | 'auto_subtask' | 'manual' | 'error';
+
+export interface CheckpointRow {
+  id: string;
+  task_id: string;
+  sequence: number;
+  trigger: string;
+  task_status: string;
+  task_notes: string | null;
+  task_metadata: string;
+  blocked_reason: string | null;
+  assigned_agent: string | null;
+  execution_phase: string | null;
+  execution_step: number | null;
+  agent_context: string | null;
+  draft_content: string | null;
+  draft_type: string | null;
+  subtask_states: string;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export interface CheckpointCreateInput {
+  taskId: string;
+  trigger?: CheckpointTrigger;
+  executionPhase?: string;
+  executionStep?: number;
+  agentContext?: Record<string, unknown>;
+  draftContent?: string;
+  draftType?: WorkProductType;
+  expiresIn?: number; // Minutes until expiry
+}
+
+export interface CheckpointCreateOutput {
+  id: string;
+  taskId: string;
+  sequence: number;
+  trigger: CheckpointTrigger;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface CheckpointResumeInput {
+  taskId: string;
+  checkpointId?: string;
+}
+
+export interface CheckpointResumeOutput {
+  taskId: string;
+  taskTitle: string;
+  checkpointId: string;
+  checkpointCreatedAt: string;
+  restoredStatus: TaskStatus;
+  restoredPhase: string | null;
+  restoredStep: number | null;
+  agentContext: Record<string, unknown> | null;
+  hasDraft: boolean;
+  draftType: WorkProductType | null;
+  draftPreview: string | null;
+  subtaskSummary: {
+    total: number;
+    completed: number;
+    pending: number;
+    blocked: number;
+  };
+  resumeInstructions: string;
+}
+
+export interface CheckpointGetInput {
+  id: string;
+}
+
+export interface CheckpointGetOutput {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  sequence: number;
+  trigger: CheckpointTrigger;
+  taskStatus: TaskStatus;
+  taskNotes: string | null;
+  taskMetadata: Record<string, unknown>;
+  blockedReason: string | null;
+  assignedAgent: string | null;
+  executionPhase: string | null;
+  executionStep: number | null;
+  agentContext: Record<string, unknown> | null;
+  draftContent: string | null;
+  draftType: WorkProductType | null;
+  subtaskStates: Array<{ id: string; status: string }>;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface CheckpointListInput {
+  taskId: string;
+  limit?: number;
+}
+
+export interface CheckpointListOutput {
+  taskId: string;
+  checkpoints: Array<{
+    id: string;
+    sequence: number;
+    trigger: CheckpointTrigger;
+    phase: string | null;
+    step: number | null;
+    hasDraft: boolean;
+    createdAt: string;
+    expiresAt: string | null;
+  }>;
+}
+
+export interface CheckpointCleanupInput {
+  taskId?: string;
+  olderThan?: number; // Minutes
+  keepLatest?: number;
+}
+
+export interface CheckpointCleanupOutput {
+  deletedCount: number;
+  remainingCount: number;
+}
+
+// ============================================================================
+// VALIDATION TYPES (core types, detailed rules in validation module)
+// ============================================================================
+
+export type ValidationSeverity = 'warn' | 'reject';
+
+export interface ValidationFlag {
+  ruleId: string;
+  ruleName: string;
+  severity: ValidationSeverity;
+  message: string;
+  suggestion?: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  flags: ValidationFlag[];
+  rejected: boolean;
+  actionableFeedback?: string;
+}
+
+export interface ValidationConfigGetOutput {
+  version: string;
+  defaultMode: 'warn' | 'reject' | 'skip';
+  globalRulesCount: number;
+  typeRules: Record<string, number>;
+}
+
+export interface ValidationRulesListInput {
+  type?: WorkProductType;
+}
+
+export interface ValidationRulesListOutput {
+  type: WorkProductType | 'global';
+  rules: Array<{
+    id: string;
+    name: string;
+    description: string;
+    type: 'size' | 'structure' | 'completeness';
+    severity: ValidationSeverity;
+    enabled: boolean;
+  }>;
+}

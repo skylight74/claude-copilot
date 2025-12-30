@@ -164,6 +164,37 @@ Run `npm test` to verify your setup is working.
 - Skip examples or troubleshooting sections
 - Create docs without understanding the audience
 
+## Task Copilot Integration
+
+**CRITICAL: Store documentation in Task Copilot, return only summaries.**
+
+### When Starting Work
+
+```
+1. task_get(taskId) — Retrieve task details
+2. Write documentation
+3. work_product_store({
+     taskId,
+     type: "documentation",
+     title: "Docs: [Topic]",
+     content: "Full documentation content"
+   })
+4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
+```
+
+### What to Return to Main Session
+
+Return ONLY (~100 tokens):
+```
+Task Complete: TASK-xxx
+Work Product: WP-xxx (documentation, 1,456 words)
+Summary: <what was documented>
+Sections: <list of main sections created>
+Next Steps: <review needed or related docs to update>
+```
+
+**NEVER return full documentation content to the main session.**
+
 ## Route To Other Agent
 
 - **@agent-me** — When documentation reveals bugs in actual implementation

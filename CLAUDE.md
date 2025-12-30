@@ -2,6 +2,72 @@
 
 This file provides guidance to Claude Code when working with the Claude Copilot framework.
 
+---
+
+## CRITICAL: Main Session Guardrails
+
+**These rules exist to prevent context bloat. Violating them wastes tokens and defeats the framework's purpose.**
+
+### What You (Main Session) Must NEVER Do
+
+| Action | Why It's Wrong | What To Do Instead |
+|--------|---------------|-------------------|
+| Read more than 3 files | Bloats context with code | Delegate to framework agent |
+| Write implementation code | Code belongs in work products | Delegate to `@agent-me` |
+| Create detailed plans | Plans belong in Task Copilot | Delegate to `@agent-ta` |
+| Use `Explore` agent | Returns full content to context | Use `@agent-ta` or `@agent-me` |
+| Use `Plan` agent | Returns full plans to context | Use `@agent-ta` with PRD |
+| Use `general-purpose` agent | No Task Copilot integration | Use specific framework agent |
+| Return detailed analysis | Fills context with text | Store as work product |
+
+### Self-Check Before Every Response
+
+Ask yourself:
+
+1. **Am I about to read multiple files?** → STOP. Delegate to agent.
+2. **Am I about to write code?** → STOP. Delegate to `@agent-me`.
+3. **Am I about to create a plan?** → STOP. Delegate to `@agent-ta`.
+4. **Am I using a generic agent?** → STOP. Switch to framework agent.
+5. **Is my response going to be long?** → STOP. Store details in Task Copilot.
+
+### Framework Agents vs Generic Agents
+
+**ONLY use framework agents** - they integrate with Task Copilot:
+
+| Framework Agent | Domain | Stores Work Products |
+|-----------------|--------|---------------------|
+| `@agent-ta` | Architecture, planning | ✅ Yes |
+| `@agent-me` | Code implementation | ✅ Yes |
+| `@agent-qa` | Testing | ✅ Yes |
+| `@agent-sec` | Security | ✅ Yes |
+| `@agent-doc` | Documentation | ✅ Yes |
+| `@agent-do` | DevOps | ✅ Yes |
+| `@agent-sd` | Service design | ✅ Yes |
+| `@agent-uxd` | UX design | ✅ Yes |
+| `@agent-uids` | UI design | ✅ Yes |
+| `@agent-uid` | UI implementation | ✅ Yes |
+| `@agent-cw` | Content | ✅ Yes |
+
+**NEVER use generic agents** - they bypass Task Copilot:
+
+| Generic Agent | Problem |
+|---------------|---------|
+| `Explore` | Returns full file contents to main context |
+| `Plan` | Returns full plans to main context |
+| `general-purpose` | No Task Copilot, returns everything to context |
+
+### Expected Token Usage Per Task
+
+| Task Type | With Framework | Without Framework |
+|-----------|---------------|-------------------|
+| Research + Plan | ~500 tokens (summary only) | ~20,000+ tokens (full content) |
+| Implementation | ~500 tokens (summary only) | ~10,000+ tokens (full code) |
+| Full initiative | ~2,000 tokens | ~50,000+ tokens (compact needed) |
+
+**If you're approaching compact, you violated these rules.**
+
+---
+
 ## Overview
 
 **Claude Copilot** is a complete AI-enabled development framework solving five challenges:

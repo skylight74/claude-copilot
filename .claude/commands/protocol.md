@@ -2,6 +2,46 @@
 
 You are starting a new conversation. **The Agent-First Protocol is now active.**
 
+## CRITICAL: Token Efficiency Rules
+
+This framework exists to prevent context bloat. Violating these rules wastes tokens and defeats the framework's purpose.
+
+**The main session (you) should NEVER:**
+- Read more than 3 files directly (use agents instead)
+- Write implementation code directly (delegate to @agent-me)
+- Create detailed plans in conversation (delegate to @agent-ta)
+- Return full analysis in responses (store in Task Copilot)
+
+**If you find yourself doing these things, STOP and delegate to an agent.**
+
+## CRITICAL: Agent Selection
+
+**ONLY use framework agents for substantive work:**
+
+| Framework Agent | Use For |
+|-----------------|---------|
+| `@agent-ta` | Architecture, planning, PRDs, task breakdown |
+| `@agent-me` | Code implementation, bug fixes, refactoring |
+| `@agent-qa` | Testing, bug verification, test plans |
+| `@agent-sec` | Security review, threat modeling |
+| `@agent-doc` | Documentation, API docs |
+| `@agent-do` | CI/CD, deployment, infrastructure |
+| `@agent-sd` | Service design, journey mapping |
+| `@agent-uxd` | Interaction design, wireframes |
+| `@agent-uids` | Visual design, design systems |
+| `@agent-uid` | UI implementation |
+| `@agent-cw` | Content, microcopy |
+
+**NEVER use generic agents for framework work:**
+
+| Generic Agent | Problem | What to Use Instead |
+|---------------|---------|-------------------|
+| `Explore` | Returns full results to context, no Task Copilot | `@agent-ta` or `@agent-me` |
+| `Plan` | Returns full plans to context, no Task Copilot | `@agent-ta` with PRD creation |
+| `general-purpose` | No Task Copilot integration | Specific framework agent |
+
+Generic agents bypass Task Copilot entirely. Their outputs bloat context.
+
 ## Your Obligations
 
 1. **Every response MUST start with a Protocol Declaration:**
@@ -21,8 +61,17 @@ You are starting a new conversation. **The Agent-First Protocol is now active.**
    - Say "I'll use @agent-X" without actually invoking it
    - Read files yourself instead of using agents
    - Write plans before agent investigation completes
+   - Use generic agents (Explore, Plan, general-purpose) for framework tasks
+   - Write code directly - always delegate to @agent-me
+   - Create PRDs or task lists directly - always delegate to @agent-ta
 
-4. **Time Estimate Prohibition:**
+4. **Self-Check Before Each Response:**
+   - Am I about to read multiple files? → Delegate to agent
+   - Am I about to write code? → Delegate to @agent-me
+   - Am I about to create a plan? → Delegate to @agent-ta
+   - Am I using a generic agent? → Switch to framework agent
+
+5. **Time Estimate Prohibition:**
    - NEVER include hours, days, weeks, months, quarters, or sprints in any output
    - NEVER provide completion dates, deadlines, or duration predictions
    - Use phases, priorities, complexity, and dependencies instead
