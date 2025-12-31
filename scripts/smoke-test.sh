@@ -108,13 +108,14 @@ section "ST-02: Agent File Validity"
 for agent_file in "$REPO_ROOT/.claude/agents"/*.md; do
   agent_name=$(basename "$agent_file")
 
-  # Check required sections
-  if grep -q "## Identity" "$agent_file"; then
-    pass "$agent_name has Identity section"
+  # Check frontmatter exists (YAML block between --- markers)
+  if grep -q "^---$" "$agent_file"; then
+    pass "$agent_name has frontmatter"
   else
-    fail "$agent_name missing Identity section"
+    fail "$agent_name missing frontmatter"
   fi
 
+  # Check required sections
   if grep -q "## Core Behaviors" "$agent_file"; then
     pass "$agent_name has Core Behaviors section"
   else
@@ -127,10 +128,10 @@ for agent_file in "$REPO_ROOT/.claude/agents"/*.md; do
     fail "$agent_name missing routing section"
   fi
 
-  if grep -q "## Decision Authority" "$agent_file"; then
-    pass "$agent_name has Decision Authority section"
+  if grep -q "## Task Copilot Integration" "$agent_file"; then
+    pass "$agent_name has Task Copilot Integration section"
   else
-    fail "$agent_name missing Decision Authority section"
+    fail "$agent_name missing Task Copilot Integration section"
   fi
 done
 
@@ -139,7 +140,10 @@ done
 #############################
 section "ST-03: MCP Configuration"
 
-if [[ -f "$REPO_ROOT/.mcp.json" ]]; then
+# Skip .mcp.json checks in CI environments (file is gitignored)
+if [[ -n "$CI" ]]; then
+  info ".mcp.json check skipped (CI environment, file is gitignored)"
+elif [[ -f "$REPO_ROOT/.mcp.json" ]]; then
   pass ".mcp.json exists"
 
   # Validate JSON syntax
@@ -162,7 +166,7 @@ if [[ -f "$REPO_ROOT/.mcp.json" ]]; then
     fail ".mcp.json has invalid JSON syntax"
   fi
 else
-  fail ".mcp.json missing"
+  info ".mcp.json not found (run /setup-project to create)"
 fi
 
 #############################

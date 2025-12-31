@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2025-12-31
+
+### Fixed
+
+- Smoke test now validates actual agent structure (removed obsolete Identity/Decision Authority checks)
+- Smoke test skips `.mcp.json` check in CI environments (file is gitignored)
+- Updated CLAUDE.md "Required Agent Sections" to match current agent structure
+
 ## [1.6.2] - 2025-12-31
 
 ### Changed

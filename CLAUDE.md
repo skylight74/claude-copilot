@@ -555,14 +555,12 @@ Call `initiative_update` with:
 
 Every agent must include:
 
-1. **Frontmatter** - name, description, tools, model
-2. **Identity** - Role, Mission, Success criteria
-3. **Core Behaviors** - Always do / Never do
-4. **Output Formats** - Templates for deliverables
-5. **Quality Gates** - Checklists
-6. **Route To Other Agent** - When to hand off
-7. **Decision Authority** - Autonomous vs escalate
-8. **Task Copilot Integration** - How to store work products
+1. **Frontmatter** - name, description, tools, model (YAML block between `---` markers)
+2. **Opening description** - Role and mission (paragraph after frontmatter)
+3. **Core Behaviors** - Always do / Never do lists
+4. **Output format** - Example output or deliverable templates
+5. **Route To Other Agent** - When to hand off to specialists
+6. **Task Copilot Integration** - How to store work products
 
 ---
 
