@@ -8,8 +8,9 @@
  * 4. Checkpoint system (checkpoint_create, checkpoint_resume, checkpoint_list, checkpoint_cleanup)
  * 5. Iteration system (iteration_start, iteration_validate, iteration_next, iteration_complete)
  * 6. Hook system (hook_register, hook_evaluate, hook_list, hook_clear)
- * 7. Progress summary accuracy
- * 8. Error handling
+ * 7. Agent handoff system (agent_handoff, agent_chain_get)
+ * 8. Progress summary accuracy
+ * 9. Error handling
  *
  * Run with: npm run build && node dist/tools/full-integration.test.js
  */
@@ -40,13 +41,15 @@ import {
   getTaskHooks,
   clearTaskHooks
 } from './stop-hooks.js';
+import { agentHandoff, agentChainGet } from './agent-handoff.js';
 import type {
   PrdCreateInput,
   TaskCreateInput,
   WorkProductStoreInput,
   CheckpointCreateInput,
   InitiativeLinkInput,
-  ProgressSummaryInput
+  ProgressSummaryInput,
+  AgentHandoffInput
 } from '../types.js';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
@@ -1111,7 +1114,414 @@ async function testHookEvaluationStandalone(): Promise<void> {
 }
 
 // ============================================================================
-// TEST SUITE 7: PROGRESS SUMMARY
+// TEST SUITE 7: AGENT HANDOFF SYSTEM
+// ============================================================================
+
+async function testAgentHandoffCreate(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    setupInitiative(db);
+    const prd = await prdCreate(db, { title: 'Test PRD', content: 'Content' });
+    const task = await taskCreate(db, {
+      title: 'Feature Implementation',
+      prdId: prd.id,
+      assignedAgent: '@agent-sd'
+    });
+
+    // Create work product for handoff
+    const wp = await workProductStore(db, {
+      taskId: task.id,
+      type: 'other',
+      title: 'Service Design',
+      content: 'User journey and service blueprint'
+    });
+
+    // Record handoff from service designer to UX designer
+    const input: AgentHandoffInput = {
+      taskId: task.id,
+      fromAgent: '@agent-sd',
+      toAgent: '@agent-uxd',
+      workProductId: wp.id,
+      handoffContext: 'Journey map complete',
+      chainPosition: 1,
+      chainLength: 3
+    };
+
+    const result = agentHandoff(db, input);
+
+    assert(result.id !== undefined, 'Handoff should have an ID');
+    assert(result.taskId === task.id, 'Handoff should link to task');
+    assert(result.fromAgent === '@agent-sd', 'From agent should match');
+    assert(result.toAgent === '@agent-uxd', 'To agent should match');
+    assert(result.chainPosition === 1, 'Chain position should match');
+    assert(result.chainLength === 3, 'Chain length should match');
+    assert(result.createdAt !== undefined, 'Should have creation timestamp');
+
+    console.log(`  ✓ Created handoff: ${result.id}`);
+    console.log(`  ✓ Handoff: ${result.fromAgent} → ${result.toAgent}`);
+    console.log(`  ✓ Chain: ${result.chainPosition}/${result.chainLength}`);
+  } finally {
+    db.close();
+  }
+}
+
+async function testAgentHandoffValidation(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    setupInitiative(db);
+    const prd = await prdCreate(db, { title: 'Test PRD', content: 'Content' });
+    const task = await taskCreate(db, { title: 'Test Task', prdId: prd.id });
+    const wp = await workProductStore(db, {
+      taskId: task.id,
+      type: 'implementation',
+      title: 'Code',
+      content: 'Implementation code'
+    });
+
+    // Test 1: Handoff context exceeds 50 characters
+    let errorThrown = false;
+    try {
+      agentHandoff(db, {
+        taskId: task.id,
+        fromAgent: '@agent-me',
+        toAgent: '@agent-qa',
+        workProductId: wp.id,
+        handoffContext: 'This context is way too long and exceeds the maximum allowed length of fifty characters',
+        chainPosition: 1,
+        chainLength: 2
+      });
+    } catch (error) {
+      errorThrown = true;
+      const message = error instanceof Error ? error.message : '';
+      assert(message.includes('exceeds 50 characters'), 'Should mention character limit');
+      console.log(`  ✓ Rejected long context: ${message}`);
+    }
+    assert(errorThrown, 'Should throw error for long context');
+
+    // Test 2: Valid context at exactly 50 characters
+    const validHandoff = agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-me',
+      toAgent: '@agent-qa',
+      workProductId: wp.id,
+      handoffContext: '12345678901234567890123456789012345678901234567890', // Exactly 50
+      chainPosition: 1,
+      chainLength: 2
+    });
+    assert(validHandoff.id !== undefined, 'Should accept 50-char context');
+    console.log(`  ✓ Accepted context at 50 chars: ${validHandoff.id}`);
+
+    // Test 3: Invalid work product ID
+    errorThrown = false;
+    try {
+      agentHandoff(db, {
+        taskId: task.id,
+        fromAgent: '@agent-me',
+        toAgent: '@agent-qa',
+        workProductId: 'NONEXISTENT',
+        handoffContext: 'Test',
+        chainPosition: 1,
+        chainLength: 2
+      });
+    } catch (error) {
+      errorThrown = true;
+      const message = error instanceof Error ? error.message : '';
+      assert(message.includes('not found'), 'Should mention work product not found');
+      console.log(`  ✓ Rejected invalid work product: ${message}`);
+    }
+    assert(errorThrown, 'Should throw error for invalid work product');
+
+    // Test 4: Invalid chain position
+    errorThrown = false;
+    try {
+      agentHandoff(db, {
+        taskId: task.id,
+        fromAgent: '@agent-me',
+        toAgent: '@agent-qa',
+        workProductId: wp.id,
+        handoffContext: 'Test',
+        chainPosition: 5,
+        chainLength: 3
+      });
+    } catch (error) {
+      errorThrown = true;
+      const message = error instanceof Error ? error.message : '';
+      assert(message.includes('Invalid chain position'), 'Should mention invalid position');
+      console.log(`  ✓ Rejected invalid chain position: ${message}`);
+    }
+    assert(errorThrown, 'Should throw error for invalid chain position');
+  } finally {
+    db.close();
+  }
+}
+
+async function testAgentChainGetEmpty(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    setupInitiative(db);
+    const prd = await prdCreate(db, { title: 'Test PRD', content: 'Content' });
+    const task = await taskCreate(db, { title: 'Test Task', prdId: prd.id });
+
+    // Get chain for task with no handoffs
+    const chain = agentChainGet(db, { taskId: task.id });
+
+    assert(chain !== null, 'Should return result for valid task');
+    assert(chain!.taskId === task.id, 'Should match task ID');
+    assert(chain!.handoffs.length === 0, 'Should have empty handoffs array');
+    assert(chain!.chainLength === 1, 'Should default to chain length 1');
+    assert(chain!.workProducts.length === 0, 'Should have no work products');
+
+    console.log(`  ✓ Retrieved chain for task with no handoffs`);
+    console.log(`  ✓ Handoffs: ${chain!.handoffs.length}`);
+    console.log(`  ✓ Chain length: ${chain!.chainLength}`);
+  } finally {
+    db.close();
+  }
+}
+
+async function testAgentChainGetOrdered(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    setupInitiative(db);
+    const prd = await prdCreate(db, { title: 'Test PRD', content: 'Content' });
+    const task = await taskCreate(db, {
+      title: 'Multi-agent Task',
+      prdId: prd.id
+    });
+
+    // Create work products for each agent
+    const wp1 = await workProductStore(db, {
+      taskId: task.id,
+      type: 'other',
+      title: 'Service Design',
+      content: 'Journey design'
+    });
+
+    const wp2 = await workProductStore(db, {
+      taskId: task.id,
+      type: 'other',
+      title: 'UX Design',
+      content: 'Wireframes and interactions'
+    });
+
+    const wp3 = await workProductStore(db, {
+      taskId: task.id,
+      type: 'implementation',
+      title: 'UI Implementation',
+      content: 'Component code'
+    });
+
+    // Create handoffs in order
+    const handoff1 = agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-sd',
+      toAgent: '@agent-uxd',
+      workProductId: wp1.id,
+      handoffContext: 'Journey complete',
+      chainPosition: 1,
+      chainLength: 3
+    });
+
+    const handoff2 = agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-uxd',
+      toAgent: '@agent-uid',
+      workProductId: wp2.id,
+      handoffContext: 'Wireframes ready',
+      chainPosition: 2,
+      chainLength: 3
+    });
+
+    const handoff3 = agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-uid',
+      toAgent: '@agent-qa',
+      workProductId: wp3.id,
+      handoffContext: 'Components done',
+      chainPosition: 3,
+      chainLength: 3
+    });
+
+    console.log(`  ✓ Created 3 handoffs`);
+
+    // Get chain
+    const chain = agentChainGet(db, { taskId: task.id });
+
+    assert(chain !== null, 'Should retrieve chain');
+    assert(chain!.handoffs.length === 3, 'Should have 3 handoffs');
+    assert(chain!.chainLength === 3, 'Should have chain length 3');
+
+    // Verify handoffs are ordered by chain position
+    assert(chain!.handoffs[0].chainPosition === 1, 'First handoff should be position 1');
+    assert(chain!.handoffs[1].chainPosition === 2, 'Second handoff should be position 2');
+    assert(chain!.handoffs[2].chainPosition === 3, 'Third handoff should be position 3');
+
+    console.log(`  ✓ Handoffs ordered by chain position`);
+    console.log(`  ✓ Chain: ${chain!.handoffs[0].fromAgent} → ${chain!.handoffs[1].fromAgent} → ${chain!.handoffs[2].fromAgent} → ${chain!.handoffs[2].toAgent}`);
+
+    // Verify handoff context preserved
+    assert(chain!.handoffs[0].handoffContext === 'Journey complete', 'Context should match');
+    assert(chain!.handoffs[1].handoffContext === 'Wireframes ready', 'Context should match');
+    assert(chain!.handoffs[2].handoffContext === 'Components done', 'Context should match');
+
+    console.log(`  ✓ Handoff contexts preserved`);
+  } finally {
+    db.close();
+  }
+}
+
+async function testAgentChainFullScenario(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    setupInitiative(db);
+    const prd = await prdCreate(db, {
+      title: 'E-commerce Checkout Flow',
+      content: 'Design and implement checkout experience'
+    });
+
+    const task = await taskCreate(db, {
+      title: 'Implement checkout flow',
+      prdId: prd.id,
+      assignedAgent: '@agent-sd'
+    });
+
+    console.log(`  ✓ Created task for multi-agent workflow`);
+
+    // Agent 1: Service Designer (@agent-sd)
+    const sdWork = await workProductStore(db, {
+      taskId: task.id,
+      type: 'other',
+      title: 'Service Design: Checkout Journey',
+      content: `
+# Checkout Journey Design
+
+## User Journey
+1. Cart review
+2. Shipping information
+3. Payment method
+4. Order confirmation
+
+## Service Blueprint
+- Customer touchpoints identified
+- Backend processes mapped
+- Pain points documented
+      `.trim()
+    });
+
+    agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-sd',
+      toAgent: '@agent-uxd',
+      workProductId: sdWork.id,
+      handoffContext: 'Journey map complete',
+      chainPosition: 1,
+      chainLength: 3
+    });
+
+    console.log(`  ✓ Agent 1 (@agent-sd) completed and handed off`);
+
+    // Agent 2: UX Designer (@agent-uxd)
+    const uxdWork = await workProductStore(db, {
+      taskId: task.id,
+      type: 'other',
+      title: 'UX Design: Checkout Wireframes',
+      content: `
+# Checkout Wireframes
+
+## Screens
+1. Cart summary (mobile + desktop)
+2. Shipping form with validation
+3. Payment method selector
+4. Order confirmation with animations
+
+## Interactions
+- Progressive disclosure
+- Inline validation
+- Loading states
+      `.trim()
+    });
+
+    agentHandoff(db, {
+      taskId: task.id,
+      fromAgent: '@agent-uxd',
+      toAgent: '@agent-uid',
+      workProductId: uxdWork.id,
+      handoffContext: 'Wireframes approved',
+      chainPosition: 2,
+      chainLength: 3
+    });
+
+    console.log(`  ✓ Agent 2 (@agent-uxd) completed and handed off`);
+
+    // Agent 3: UI Developer (@agent-uid)
+    const uidWork = await workProductStore(db, {
+      taskId: task.id,
+      type: 'implementation',
+      title: 'UI Implementation: Checkout Components',
+      content: `
+# Checkout Components Implementation
+
+## Files Modified
+- src/components/CheckoutCart.tsx
+- src/components/ShippingForm.tsx
+- src/components/PaymentSelector.tsx
+- src/components/OrderConfirmation.tsx
+
+## Tests
+All 24 component tests passing
+
+## Accessibility
+- WCAG AA compliant
+- Keyboard navigation
+- Screen reader tested
+      `.trim()
+    });
+
+    // Final agent does NOT create a handoff - they just store work product
+    // and return consolidated summary to main session
+
+    console.log(`  ✓ Agent 3 (@agent-uid) completed (final agent - no handoff needed)`);
+
+    // Verify complete chain
+    const chain = agentChainGet(db, { taskId: task.id });
+
+    assert(chain !== null, 'Should retrieve full chain');
+    assert(chain!.handoffs.length === 2, 'Should have 2 handoffs (final agent does not hand off)');
+    assert(chain!.workProducts.length === 3, 'Should have 3 work products');
+    assert(chain!.chainLength === 3, 'Should have chain length 3');
+
+    // Verify agent sequence (from handoffs)
+    const agents = [
+      chain!.handoffs[0].fromAgent,
+      chain!.handoffs[1].fromAgent
+    ];
+
+    assert(agents[0] === '@agent-sd', 'First agent should be service designer');
+    assert(agents[1] === '@agent-uxd', 'Second agent should be UX designer');
+    // Final agent (@agent-uid) doesn't hand off - verify via toAgent of last handoff
+    assert(chain!.handoffs[1].toAgent === '@agent-uid', 'Last handoff should be to UI developer');
+
+    console.log(`  ✓ Full chain verified: ${agents.join(' → ')} → @agent-uid (final)`);
+
+    // Verify work product mapping
+    const wpTypes = chain!.workProducts.map(wp => wp.type);
+    assert(wpTypes.includes('other'), 'Should include other type (design work)');
+    assert(wpTypes.includes('implementation'), 'Should include implementation');
+
+    console.log(`  ✓ Work products mapped: ${chain!.workProducts.length} products`);
+    console.log(`  ✓ Full scenario test complete`);
+  } finally {
+    db.close();
+  }
+}
+
+// ============================================================================
+// TEST SUITE 8: PROGRESS SUMMARY
 // ============================================================================
 
 async function testProgressSummaryAccuracy(): Promise<void> {
@@ -1192,7 +1602,7 @@ async function testProgressSummaryAccuracy(): Promise<void> {
 }
 
 // ============================================================================
-// TEST SUITE 8: ERROR HANDLING
+// TEST SUITE 9: ERROR HANDLING
 // ============================================================================
 
 async function testErrorHandling(): Promise<void> {
@@ -1313,6 +1723,13 @@ async function runAllTests(): Promise<void> {
     await runTest('Hook Registration', testHookRegistration);
     await runTest('Hook Evaluation with Iteration', testHookEvaluationWithIteration);
     await runTest('Hook Evaluation Standalone', testHookEvaluationStandalone);
+
+    // Agent Handoff System
+    await runTest('Agent Handoff Create', testAgentHandoffCreate);
+    await runTest('Agent Handoff Validation', testAgentHandoffValidation);
+    await runTest('Agent Chain Get Empty', testAgentChainGetEmpty);
+    await runTest('Agent Chain Get Ordered', testAgentChainGetOrdered);
+    await runTest('Agent Chain Full Scenario', testAgentChainFullScenario);
 
     // Progress Summary
     await runTest('Progress Summary Accuracy', testProgressSummaryAccuracy);

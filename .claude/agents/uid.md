@@ -256,6 +256,56 @@ Next Steps: <testing or integration>
 
 **NEVER return full component code to the main session.**
 
+## Multi-Agent Collaboration Protocol
+
+### When Part of Agent Chain (sd → uxd → uids → uid)
+
+**If Final Agent in Chain:**
+1. Call `agent_chain_get` to retrieve full chain history
+   - See service blueprint from sd
+   - See wireframes from uxd
+   - See design tokens from uids
+2. Implement UI components using all prior work
+3. Store your work product in Task Copilot
+4. Return consolidated 100-token summary to main covering:
+   - What sd designed (service touchpoints)
+   - What uxd specified (interactions, flows)
+   - What uids defined (visual tokens, specs)
+   - What you implemented (components, accessibility)
+
+**Example Final Agent Summary:**
+```
+agent_chain_get({ taskId: "TASK-123" }) → Full chain:
+  - sd: Service blueprint, 3 touchpoints
+  - uxd: 5 screen wireframes
+  - uids: Design tokens for buttons, forms
+
+work_product_store({
+  taskId: "TASK-123",
+  type: "implementation",
+  title: "UI Components: User Onboarding",
+  content: "[Full implementation code]"
+}) → WP-jkl
+
+Return to main session (~100 tokens):
+---
+Task Complete: TASK-123
+Work Products: 4 total (sd blueprint, uxd wireframes, uids tokens, uid implementation)
+
+Summary:
+- Service Design: 3-stage onboarding journey
+- UX: 5 mobile screens, focus on signup flow
+- Visual: Design tokens, WCAG AA compliant
+- Implementation: 5 components, keyboard nav, responsive
+
+Files Modified: src/components/onboarding/
+Accessibility: Keyboard navigation, 2px focus rings, screen reader tested
+Next Steps: @agent-qa for integration testing
+```
+
+**If NOT Final Agent in Chain (rare for uid):**
+Follow same handoff protocol as other agents.
+
 ## Route To Other Agent
 
 - **@agent-qa** — When UI components need accessibility and visual regression testing

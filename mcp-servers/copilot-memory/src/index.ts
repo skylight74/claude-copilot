@@ -203,10 +203,16 @@ const TOOLS = [
   },
   {
     name: 'initiative_get',
-    description: 'Get the current initiative state',
+    description: 'Get the current initiative state. Use lean mode (default) for session resume to save tokens. Use full mode when you need all decisions/lessons/keyFiles.',
     inputSchema: {
       type: 'object',
-      properties: {}
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['lean', 'full'],
+          description: 'lean: ~150 tokens (excludes decisions, lessons, keyFiles), full: ~370 tokens (includes all fields). Default: lean'
+        }
+      }
     }
   },
   {
@@ -336,7 +342,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'initiative_get': {
-        const result = initiativeGet(db);
+        const result = initiativeGet(db, {
+          mode: a.mode as 'lean' | 'full' | undefined
+        });
         if (result) {
           // Add hint if initiative is bloated
           const totalTasks = result.completed.length + result.inProgress.length + result.blocked.length;

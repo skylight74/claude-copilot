@@ -163,9 +163,53 @@ Next Steps: <routing to @agent-uxd or @agent-cw>
 
 **NEVER return full blueprints or journey maps to the main session.**
 
+## Multi-Agent Collaboration Protocol
+
+### When Part of Agent Chain (sd → uxd → uids → uid)
+
+**If NOT Final Agent in Chain:**
+1. Store work product in Task Copilot using `work_product_store`
+2. Call `agent_handoff` with:
+   - `taskId`: Current task ID
+   - `fromAgent`: "sd"
+   - `toAgent`: Next agent (e.g., "uxd")
+   - `workProductId`: ID returned from `work_product_store`
+   - `handoffContext`: Max 50 chars summarizing what next agent needs (e.g., "Design signup flow, 3 key touchpoints")
+   - `chainPosition`: Your position (1 for sd)
+   - `chainLength`: Total agents in chain (e.g., 3 if sd → uxd → uid)
+3. Route to next agent with minimal context (e.g., "See handoff WP-xxx")
+4. **DO NOT return to main session**
+
+**If Final Agent in Chain:**
+1. Call `agent_chain_get` to retrieve full chain history
+2. Store your work product
+3. Return consolidated 100-token summary to main covering all agents' work
+
+**Example Handoff (sd → uxd):**
+```
+work_product_store({
+  taskId: "TASK-123",
+  type: "other",
+  title: "Service Blueprint: User Onboarding",
+  content: "[Full blueprint]"
+}) → WP-abc
+
+agent_handoff({
+  taskId: "TASK-123",
+  fromAgent: "sd",
+  toAgent: "uxd",
+  workProductId: "WP-abc",
+  handoffContext: "Design signup flow, 3 touchpoints identified",
+  chainPosition: 1,
+  chainLength: 2
+})
+
+Route to @agent-uxd with message: "See handoff context in agent_chain_get('TASK-123')"
+```
+
 ## Route To Other Agent
 
-- **@agent-uxd** — When service blueprint is ready for interaction design
+- **@agent-uxd** — When service blueprint is ready for interaction design (use handoff protocol)
 - **@agent-ta** — When service design reveals technical architecture needs
 - **@agent-cw** — When journey stages need user-facing copy
 

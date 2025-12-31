@@ -12,6 +12,7 @@ import type {
   InitiativeRow,
   InitiativeStartInput,
   InitiativeUpdateInput,
+  InitiativeGetInput,
   InitiativeSlimInput,
   InitiativeSlimOutput,
   InitiativeStatus
@@ -188,10 +189,55 @@ export function initiativeUpdate(
 
 /**
  * Get the current initiative
+ * @param mode 'lean' returns ~150 tokens (excludes decisions, lessons, keyFiles)
+ *             'full' returns ~370 tokens (includes all fields)
+ *             Default: 'lean'
  */
-export function initiativeGet(db: DatabaseClient): Initiative | null {
+export function initiativeGet(
+  db: DatabaseClient,
+  input: InitiativeGetInput = {}
+): Initiative | null {
   const row = db.getInitiative();
-  return row ? rowToInitiative(row) : null;
+  if (!row) return null;
+
+  const initiative = rowToInitiative(row);
+  const mode = input.mode || 'lean';
+
+  // Lean mode: exclude decisions, lessons, keyFiles for faster resume
+  if (mode === 'lean') {
+    return {
+      id: initiative.id,
+      projectId: initiative.projectId,
+      name: initiative.name,
+      goal: initiative.goal,
+      status: initiative.status,
+
+      // Include Task Copilot integration fields
+      taskCopilotLinked: initiative.taskCopilotLinked,
+      activePrdIds: initiative.activePrdIds,
+
+      // Include slim resume context
+      currentFocus: initiative.currentFocus,
+      nextAction: initiative.nextAction,
+
+      // Exclude permanent knowledge (decisions, lessons, keyFiles)
+      decisions: [],
+      lessons: [],
+      keyFiles: [],
+
+      // Exclude deprecated fields
+      completed: [],
+      inProgress: [],
+      blocked: [],
+      resumeInstructions: undefined,
+
+      createdAt: initiative.createdAt,
+      updatedAt: initiative.updatedAt
+    };
+  }
+
+  // Full mode: return everything
+  return initiative;
 }
 
 /**

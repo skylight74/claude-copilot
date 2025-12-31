@@ -692,6 +692,141 @@ describe('Memory Copilot Integration Tests', () => {
     });
   });
 
+  describe('Two-Tier Resume System', () => {
+    before(() => {
+      // Start a fresh initiative with rich data for testing
+      initiativeStart(db, {
+        name: 'Two-Tier Test Initiative',
+        goal: 'Test the lean vs full mode behavior',
+        status: 'IN PROGRESS'
+      });
+
+      // Add permanent knowledge
+      initiativeUpdate(db, {
+        decisions: ['Decision 1', 'Decision 2'],
+        lessons: ['Lesson 1', 'Lesson 2', 'Lesson 3'],
+        keyFiles: ['file1.ts', 'file2.ts'],
+        currentFocus: 'Testing two-tier resume',
+        nextAction: 'Verify lean mode excludes heavy fields',
+        taskCopilotLinked: true,
+        activePrdIds: ['PRD-001', 'PRD-002']
+      });
+    });
+
+    it('should return lean mode by default (backward compatible)', () => {
+      const initiative = initiativeGet(db);
+
+      assert.ok(initiative);
+
+      // Essential fields should be present
+      assert.strictEqual(initiative!.name, 'Two-Tier Test Initiative');
+      assert.strictEqual(initiative!.goal, 'Test the lean vs full mode behavior');
+      assert.strictEqual(initiative!.status, 'IN PROGRESS');
+      assert.strictEqual(initiative!.currentFocus, 'Testing two-tier resume');
+      assert.strictEqual(initiative!.nextAction, 'Verify lean mode excludes heavy fields');
+      assert.strictEqual(initiative!.taskCopilotLinked, true);
+      assert.deepStrictEqual(initiative!.activePrdIds, ['PRD-001', 'PRD-002']);
+
+      // Heavy fields should be empty in lean mode
+      assert.deepStrictEqual(initiative!.decisions, []);
+      assert.deepStrictEqual(initiative!.lessons, []);
+      assert.deepStrictEqual(initiative!.keyFiles, []);
+      assert.deepStrictEqual(initiative!.completed, []);
+      assert.deepStrictEqual(initiative!.inProgress, []);
+      assert.deepStrictEqual(initiative!.blocked, []);
+      assert.strictEqual(initiative!.resumeInstructions, undefined);
+    });
+
+    it('should return lean mode when explicitly requested', () => {
+      const initiative = initiativeGet(db, { mode: 'lean' });
+
+      assert.ok(initiative);
+
+      // Essential fields should be present
+      assert.strictEqual(initiative!.name, 'Two-Tier Test Initiative');
+      assert.strictEqual(initiative!.status, 'IN PROGRESS');
+      assert.strictEqual(initiative!.currentFocus, 'Testing two-tier resume');
+      assert.strictEqual(initiative!.nextAction, 'Verify lean mode excludes heavy fields');
+
+      // Heavy fields should be empty
+      assert.deepStrictEqual(initiative!.decisions, []);
+      assert.deepStrictEqual(initiative!.lessons, []);
+      assert.deepStrictEqual(initiative!.keyFiles, []);
+    });
+
+    it('should return full mode when explicitly requested', () => {
+      const initiative = initiativeGet(db, { mode: 'full' });
+
+      assert.ok(initiative);
+
+      // Essential fields should be present
+      assert.strictEqual(initiative!.name, 'Two-Tier Test Initiative');
+      assert.strictEqual(initiative!.status, 'IN PROGRESS');
+      assert.strictEqual(initiative!.currentFocus, 'Testing two-tier resume');
+      assert.strictEqual(initiative!.nextAction, 'Verify lean mode excludes heavy fields');
+
+      // Heavy fields should contain actual data
+      assert.deepStrictEqual(initiative!.decisions, ['Decision 1', 'Decision 2']);
+      assert.deepStrictEqual(initiative!.lessons, ['Lesson 1', 'Lesson 2', 'Lesson 3']);
+      assert.deepStrictEqual(initiative!.keyFiles, ['file1.ts', 'file2.ts']);
+      assert.strictEqual(initiative!.taskCopilotLinked, true);
+      assert.deepStrictEqual(initiative!.activePrdIds, ['PRD-001', 'PRD-002']);
+    });
+
+    it('should maintain all essential fields in lean mode', () => {
+      const initiative = initiativeGet(db, { mode: 'lean' });
+
+      assert.ok(initiative);
+
+      // Verify all essential fields are present
+      assert.ok(initiative!.id);
+      assert.ok(initiative!.projectId);
+      assert.ok(initiative!.name);
+      assert.ok(initiative!.goal);
+      assert.ok(initiative!.status);
+      assert.ok(initiative!.createdAt);
+      assert.ok(initiative!.updatedAt);
+
+      // Task Copilot fields
+      assert.strictEqual(typeof initiative!.taskCopilotLinked, 'boolean');
+      assert.ok(Array.isArray(initiative!.activePrdIds));
+
+      // Slim resume fields
+      assert.strictEqual(typeof initiative!.currentFocus, 'string');
+      assert.strictEqual(typeof initiative!.nextAction, 'string');
+    });
+
+    it('should handle initiative with no currentFocus or nextAction in lean mode', () => {
+      // Start initiative without slim fields
+      initiativeComplete(db);
+      initiativeStart(db, {
+        name: 'Minimal Initiative',
+        status: 'IN PROGRESS'
+      });
+
+      const initiative = initiativeGet(db, { mode: 'lean' });
+
+      assert.ok(initiative);
+      assert.strictEqual(initiative!.name, 'Minimal Initiative');
+      assert.strictEqual(initiative!.currentFocus, undefined);
+      assert.strictEqual(initiative!.nextAction, undefined);
+      assert.strictEqual(initiative!.taskCopilotLinked, false);
+      assert.deepStrictEqual(initiative!.activePrdIds, []);
+    });
+
+    it('should handle invalid mode gracefully', () => {
+      // @ts-expect-error Testing invalid mode
+      const initiative = initiativeGet(db, { mode: 'invalid' });
+
+      assert.ok(initiative);
+
+      // Should default to lean mode behavior
+      assert.deepStrictEqual(initiative!.decisions, []);
+      assert.deepStrictEqual(initiative!.lessons, []);
+      assert.deepStrictEqual(initiative!.keyFiles, []);
+    });
+  });
+
   describe('Database Stats', () => {
     it('should provide accurate statistics', () => {
       const stats = db.getStats();

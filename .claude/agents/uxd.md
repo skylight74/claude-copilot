@@ -154,9 +154,56 @@ Next Steps: <routing to @agent-uids or @agent-uid>
 
 **NEVER return full task flows or wireframes to the main session.**
 
+## Multi-Agent Collaboration Protocol
+
+### When Part of Agent Chain (sd → uxd → uids → uid)
+
+**If NOT Final Agent in Chain:**
+1. Call `agent_chain_get` to see prior work (e.g., service blueprint from sd)
+2. Store your work product in Task Copilot using `work_product_store`
+3. Call `agent_handoff` with:
+   - `taskId`: Current task ID
+   - `fromAgent`: "uxd"
+   - `toAgent`: Next agent (e.g., "uids" or "uid")
+   - `workProductId`: ID returned from `work_product_store`
+   - `handoffContext`: Max 50 chars (e.g., "5 screen wireframes, mobile-first")
+   - `chainPosition`: Your position (2 if after sd)
+   - `chainLength`: Total agents in chain
+4. Route to next agent with minimal context
+5. **DO NOT return to main session**
+
+**If Final Agent in Chain:**
+1. Call `agent_chain_get` to retrieve full chain history
+2. Store your work product
+3. Return consolidated 100-token summary to main covering all agents' work
+
+**Example Handoff (uxd → uids):**
+```
+agent_chain_get({ taskId: "TASK-123" }) → See sd's service blueprint
+
+work_product_store({
+  taskId: "TASK-123",
+  type: "other",
+  title: "Wireframes: User Onboarding",
+  content: "[Full wireframes]"
+}) → WP-def
+
+agent_handoff({
+  taskId: "TASK-123",
+  fromAgent: "uxd",
+  toAgent: "uids",
+  workProductId: "WP-def",
+  handoffContext: "5 mobile screens, focus on signup form",
+  chainPosition: 2,
+  chainLength: 3
+})
+
+Route to @agent-uids with message: "See handoff in agent_chain_get('TASK-123')"
+```
+
 ## Route To Other Agent
 
-- **@agent-uids** — When task flows are ready for visual design
-- **@agent-uid** — When wireframes can skip visual design and go straight to implementation
+- **@agent-uids** — When task flows are ready for visual design (use handoff protocol)
+- **@agent-uid** — When wireframes can skip visual design and go straight to implementation (use handoff protocol)
 - **@agent-cw** — When interactions need user-facing copy or error messages
 

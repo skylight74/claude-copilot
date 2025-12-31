@@ -384,13 +384,17 @@ export function frameworkScenario3_CodeRefactoring() {
 }
 
 /**
- * SCENARIO 4: Session Resume (WITH Framework)
+ * SCENARIO 4: Session Resume (WITH Framework + Two-Tier Resume)
  *
- * WITH framework:
+ * WITH framework (optimized):
  * - User runs /continue
- * - Memory Copilot provides initiative state
+ * - Memory Copilot provides LEAN initiative state (mode: "lean")
  * - Task Copilot provides progress summary
- * - Total: ~400 tokens to resume (vs 2,808 in baseline)
+ * - Total: ~150 tokens to resume (vs 2,808 in baseline)
+ *
+ * Two-Tier Resume optimization:
+ * - Lean mode (default): ~150 tokens (status, currentFocus, nextAction only)
+ * - Full mode (on-demand): ~370 tokens (includes decisions, lessons, keyFiles)
  */
 export function frameworkScenario4_SessionResume() {
   const tracker = createMeasurementTracker(
@@ -402,41 +406,21 @@ export function frameworkScenario4_SessionResume() {
   const mainInput = 'Continue working on the user dashboard feature from yesterday';
   tracker.measure('main_input', mainInput);
 
-  // WITH framework: Memory Copilot provides compact initiative state
+  // WITH framework + Two-Tier Resume: Memory Copilot provides LEAN initiative state
   const mainContext = `
     ${mainInput}
 
     # User runs /continue
-    # Memory Copilot loads initiative via initiative_get
+    # Memory Copilot loads initiative via initiative_get({ mode: "lean" })
 
     Initiative: User Dashboard Feature
     Status: In Progress
-    Phase: Implementation
+    Current Focus: Implementing QuickStats component
+    Next Action: Create QuickStats.tsx with stat cards
 
-    Summary: Building user dashboard with profile, activity feed, and stats.
-    Completed dashboard layout and profile section. Next: QuickStats component.
-
-    Key Files:
-    - src/pages/Dashboard.tsx
-    - src/components/UserProfile.tsx
-    - src/components/ActivityFeed.tsx
-    - src/hooks/useDashboardData.ts
-
-    Decisions:
-    - Using React Query for data fetching
-    - Tailwind CSS for styling
-    - Component structure: Dashboard → UserProfile, ActivityFeed, QuickStats
-
-    Blockers:
-    - Avatar CORS issue (STILL OPEN)
-
-    Next Steps:
-    1. Create QuickStats component
-    2. Create SettingsShortcut component
-    3. Fix avatar CORS issue
-
-    # Total context from Memory Copilot: ~250 tokens
-    # No need to re-read all files or recreate full history
+    # Total context from Memory Copilot (lean mode): ~50 tokens
+    # + Task Copilot progress_summary: ~50 tokens
+    # Total: ~100 tokens (vs 370 in full mode, vs 2,808 in baseline)
   `.trim();
   tracker.measure('main_context', mainContext);
 
@@ -446,54 +430,26 @@ export function frameworkScenario4_SessionResume() {
   // No storage for resume operation
   tracker.measure('storage', '');
 
-  // Retrieval from Memory Copilot
+  // Retrieval from Memory Copilot (lean mode)
   const retrieval = `
-    # Retrieved via initiative_get
+    # Retrieved via initiative_get({ mode: "lean" })
     {
       "id": "INIT-xxx",
-      "title": "User Dashboard Feature",
+      "name": "User Dashboard Feature",
       "status": "in_progress",
-      "inProgress": [
-        "Implementing dashboard components",
-        "Need QuickStats and SettingsShortcut components"
-      ],
-      "completed": [
-        "Dashboard layout",
-        "UserProfile component",
-        "ActivityFeed component",
-        "Data fetching with React Query"
-      ],
-      "decisions": [
-        "Use React Query over SWR",
-        "Use Tailwind CSS",
-        "Component-based architecture"
-      ],
-      "keyFiles": [
-        "src/pages/Dashboard.tsx",
-        "src/components/UserProfile.tsx",
-        "src/components/ActivityFeed.tsx",
-        "src/hooks/useDashboardData.ts"
-      ],
-      "lessons": [
-        "TypeScript types needed for stats object",
-        "React Query cache keys must be consistent"
-      ],
-      "blockers": [
-        "Avatar CORS issue with image CDN"
-      ]
+      "currentFocus": "Implementing QuickStats component",
+      "nextAction": "Create QuickStats.tsx with stat cards",
+      "taskCopilotLinked": true,
+      "activePrdIds": ["PRD-dashboard"]
     }
-
-    # Retrieved: ~350 tokens (vs 2,808 in baseline)
+    # Lean mode excludes: decisions, lessons, keyFiles (available via full mode)
+    # Retrieved: ~50 tokens (vs 370 in full mode)
   `.trim();
   tracker.measure('retrieval', retrieval);
 
   // Nothing returned to main for resume - context is already in main
   const mainReturn = `
-    # Context loaded from Memory Copilot
-    # User can immediately continue work
-    # No summary needed - this IS the summary
-
-    Ready to continue. Current task: Create QuickStats component.
+    Ready to continue. Current focus: Implementing QuickStats component.
   `.trim();
   tracker.measure('main_return', mainReturn);
 
@@ -501,15 +457,20 @@ export function frameworkScenario4_SessionResume() {
 }
 
 /**
- * SCENARIO 5: Multi-Agent Collaboration (WITH Framework)
+ * SCENARIO 5: Multi-Agent Collaboration (WITH Framework + Hierarchical Handoffs)
  *
- * WITH framework:
+ * WITH framework (optimized):
  * - User requests design + implementation
- * - @agent-ta handles architecture (stores in Task Copilot)
- * - @agent-me handles implementation (stores in Task Copilot)
- * - @agent-qa handles testing (stores in Task Copilot)
- * - Each returns ~300 token summary
- * - Total main context: ~1,200 tokens (vs 6,319 in baseline)
+ * - @agent-ta handles architecture (stores in Task Copilot, hands off to @agent-me)
+ * - @agent-me handles implementation (stores in Task Copilot, hands off to @agent-qa)
+ * - @agent-qa handles testing (stores in Task Copilot, returns to main)
+ * - Only FINAL agent returns to main session (~100 tokens)
+ * - Total main context: ~100 tokens (vs 900 without hierarchical, vs 6,319 baseline)
+ *
+ * Hierarchical Handoff optimization:
+ * - Intermediate agents use agent_handoff (50-char context each)
+ * - Final agent uses agent_chain_get to see full chain
+ * - Final agent returns consolidated ~100 token summary
  */
 export function frameworkScenario5_MultiAgentCollaboration() {
   const tracker = createMeasurementTracker(
@@ -526,20 +487,17 @@ export function frameworkScenario5_MultiAgentCollaboration() {
 
     # User invokes /protocol with ARCHITECTURE type
     # Protocol routes to @agent-ta for design
-    # Then routes to @agent-me for implementation
-    # Then routes to @agent-qa for testing
+    # @agent-ta stores work, calls agent_handoff, routes to @agent-me (no return to main)
+    # @agent-me stores work, calls agent_handoff, routes to @agent-qa (no return to main)
+    # @agent-qa (final) calls agent_chain_get, stores work, returns to main
 
-    ## Phase 1: Architecture (@agent-ta)
-    [~300 token summary returned]
+    ## Hierarchical Handoff Chain:
+    # @agent-ta → @agent-me (handoff: "Architecture complete, WebSocket+Redis")
+    # @agent-me → @agent-qa (handoff: "Implementation complete, 4 files")
+    # @agent-qa → MAIN (consolidated summary: ~100 tokens)
 
-    ## Phase 2: Implementation (@agent-me)
-    [~300 token summary returned]
-
-    ## Phase 3: Testing (@agent-qa)
-    [~300 token summary returned]
-
-    # Total main context: Summaries only, full work in Task Copilot
-    # ~1,200 tokens total (vs 6,319 in baseline)
+    # Total main context: Only final summary
+    # ~100 tokens (vs 900 without hierarchical, vs 6,319 in baseline)
   `.trim();
   tracker.measure('main_context', mainContext);
 
@@ -616,66 +574,29 @@ export function frameworkScenario5_MultiAgentCollaboration() {
   `.trim();
   tracker.measure('storage', storage);
 
-  // Each agent returns summary to main
+  // Only FINAL agent returns consolidated summary to main (hierarchical handoffs)
   const mainReturn = `
-    # SUMMARY FROM @agent-ta
-    Task Complete: TASK-architecture-xxx
-    Work Product: WP-arch-yyy (architecture, 2,187 tokens stored)
+    # CONSOLIDATED SUMMARY FROM @agent-qa (Final Agent)
+    # Retrieved chain via agent_chain_get: 3 agents, 3 work products
 
-    Summary: Designed real-time notification system using WebSocket (Socket.io)
-    with Redis Pub/Sub for message delivery and PostgreSQL for persistence.
+    ## Chain Complete: Real-Time Notification System
+    Status: Design → Implementation → Testing COMPLETE
 
-    Key Decisions:
-    - Socket.io for WebSocket (better fallbacks than raw WebSocket)
-    - Redis Pub/Sub for real-time + Streams for offline
-    - PostgreSQL for persistence
-    - Horizontal scaling with sticky sessions
+    Work Products Stored:
+    - WP-arch: Architecture design (2,187 tokens)
+    - WP-impl: Implementation (3,782 tokens)
+    - WP-test: Test plan (987 tokens)
 
-    Components: Socket server, Notification service, Client library
-    Scalability: Supports 100k concurrent users via horizontal scaling
+    Key Outcomes:
+    - WebSocket + Redis architecture designed
+    - 4 source files implemented
+    - Comprehensive test plan ready
 
-    ----
+    Next: Execute test suite
 
-    # SUMMARY FROM @agent-me
-    Task Complete: TASK-implementation-xxx
-    Work Product: WP-impl-yyy (implementation, 3,782 tokens stored)
-
-    Summary: Implemented all components for real-time notification system.
-
-    Files Created:
-    - src/socket/server.ts (Socket.io server with Redis adapter)
-    - src/services/notification.service.ts (Business logic)
-    - src/client/notification-client.ts (Client library)
-    - migrations/notifications.sql (Database schema)
-
-    Features:
-    - JWT authentication for WebSocket connections
-    - Redis Pub/Sub for real-time delivery
-    - PostgreSQL persistence
-    - Offline queue in client
-    - Auto-reconnect logic
-
-    ----
-
-    # SUMMARY FROM @agent-qa
-    Task Complete: TASK-testing-xxx
-    Work Product: WP-test-yyy (test_plan, 987 tokens stored)
-
-    Summary: Created comprehensive test plan covering unit, integration, and load
-    testing for notification system.
-
-    Test Coverage:
-    - Unit tests: Notification service, Socket handling
-    - Integration tests: End-to-end delivery flow, Offline handling
-    - Load tests: 10k concurrent connections, 1000 msg/sec throughput
-
-    Status: Test plan ready, example tests provided
-    Next: Execute full test suite
-
-    ----
-
-    # Total returned to main: ~900 tokens (summaries only)
-    # vs 6,319 tokens in baseline where everything was inline
+    # Total returned to main: ~100 tokens (consolidated summary)
+    # vs 900 tokens without hierarchical handoffs
+    # vs 6,319 tokens in baseline
   `.trim();
   tracker.measure('main_return', mainReturn);
 

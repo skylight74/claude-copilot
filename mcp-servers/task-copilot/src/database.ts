@@ -158,6 +158,26 @@ ALTER TABLE checkpoints ADD COLUMN validation_state TEXT DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_checkpoints_iteration ON checkpoints(task_id, iteration_number DESC);
 `;
 
+// Migration SQL for version 5: Hierarchical Agent Handoffs
+const MIGRATION_V5_SQL = `
+-- agent_handoffs table
+CREATE TABLE IF NOT EXISTS agent_handoffs (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  from_agent TEXT NOT NULL,
+  to_agent TEXT NOT NULL,
+  work_product_id TEXT NOT NULL,
+  handoff_context TEXT NOT NULL,
+  chain_position INTEGER NOT NULL,
+  chain_length INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_handoffs_task ON agent_handoffs(task_id, chain_position ASC);
+CREATE INDEX IF NOT EXISTS idx_handoffs_agents ON agent_handoffs(from_agent, to_agent);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -165,7 +185,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -238,6 +258,15 @@ export class DatabaseClient {
       this.db.exec(MIGRATION_V4_SQL);
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
         4,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v5: Hierarchical Agent Handoffs
+    if (currentVersion < 5) {
+      this.db.exec(MIGRATION_V5_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        5,
         new Date().toISOString()
       );
     }
@@ -852,6 +881,63 @@ export class DatabaseClient {
       totalIterations: result.totalIterations || 0,
       avgIterationsPerSession
     };
+  }
+
+  // ============================================================================
+  // AGENT HANDOFFS
+  // ============================================================================
+
+  insertHandoff(handoff: {
+    id: string;
+    task_id: string;
+    from_agent: string;
+    to_agent: string;
+    work_product_id: string;
+    handoff_context: string;
+    chain_position: number;
+    chain_length: number;
+    created_at: string;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO agent_handoffs (id, task_id, from_agent, to_agent, work_product_id, handoff_context, chain_position, chain_length, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      handoff.id,
+      handoff.task_id,
+      handoff.from_agent,
+      handoff.to_agent,
+      handoff.work_product_id,
+      handoff.handoff_context,
+      handoff.chain_position,
+      handoff.chain_length,
+      handoff.created_at
+    );
+  }
+
+  getHandoffChain(taskId: string): Array<{
+    id: string;
+    task_id: string;
+    from_agent: string;
+    to_agent: string;
+    work_product_id: string;
+    handoff_context: string;
+    chain_position: number;
+    chain_length: number;
+    created_at: string;
+  }> {
+    return this.db.prepare(
+      'SELECT * FROM agent_handoffs WHERE task_id = ? ORDER BY chain_position ASC'
+    ).all(taskId) as Array<{
+      id: string;
+      task_id: string;
+      from_agent: string;
+      to_agent: string;
+      work_product_id: string;
+      handoff_context: string;
+      chain_position: number;
+      chain_length: number;
+      created_at: string;
+    }>;
   }
 
   close(): void {

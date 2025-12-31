@@ -123,6 +123,10 @@ export interface InitiativeUpdateInput {
   status?: InitiativeStatus;
 }
 
+export interface InitiativeGetInput {
+  mode?: 'lean' | 'full';  // lean: ~150 tokens, full: ~370 tokens (default: lean)
+}
+
 export interface InitiativeSlimInput {
   archiveDetails?: boolean;  // Save old data to file before slimming (default: true)
 }

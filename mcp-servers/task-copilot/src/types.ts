@@ -615,3 +615,54 @@ export interface SessionGuardOutput {
   warnings: string[];
   suggestions: string[];
 }
+
+// ============================================================================
+// AGENT HANDOFF TYPES
+// ============================================================================
+
+export interface AgentHandoffInput {
+  taskId: string;
+  fromAgent: string;
+  toAgent: string;
+  workProductId: string;
+  handoffContext: string;
+  chainPosition: number;
+  chainLength: number;
+}
+
+export interface AgentHandoffOutput {
+  id: string;
+  taskId: string;
+  fromAgent: string;
+  toAgent: string;
+  chainPosition: number;
+  chainLength: number;
+  createdAt: string;
+}
+
+export interface AgentChainGetInput {
+  taskId: string;
+}
+
+export interface HandoffRecord {
+  id: string;
+  fromAgent: string;
+  toAgent: string;
+  workProductId: string;
+  handoffContext: string;
+  chainPosition: number;
+  chainLength: number;
+  createdAt: string;
+}
+
+export interface AgentChainGetOutput {
+  taskId: string;
+  chainLength: number;
+  handoffs: HandoffRecord[];
+  workProducts: Array<{
+    id: string;
+    type: WorkProductType;
+    title: string;
+    agent: string;
+  }>;
+}

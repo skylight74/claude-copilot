@@ -29,6 +29,7 @@ import {
   clearTaskHooks
 } from './tools/stop-hooks.js';
 import { sessionGuard } from './tools/session-guard.js';
+import { agentHandoff, agentChainGet } from './tools/agent-handoff.js';
 import { getValidator, initValidator } from './validation/index.js';
 import type {
   PrdCreateInput,
@@ -53,6 +54,8 @@ import type {
   CheckpointCleanupInput,
   ValidationRulesListInput,
   SessionGuardInput,
+  AgentHandoffInput,
+  AgentChainGetInput,
   TaskStatus,
   PrdStatus,
   WorkProductType,
@@ -609,6 +612,35 @@ const TOOLS = [
       },
       required: ['action']
     }
+  },
+  // Agent Handoff Tools
+  {
+    name: 'agent_handoff',
+    description: 'Record agent handoff in multi-agent collaboration chain. Intermediate agents store work in Task Copilot and pass minimal context (max 50 chars) to next agent. Only final agent returns to main session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID' },
+        fromAgent: { type: 'string', description: 'Agent handing off (sd, uxd, uids, uid, etc.)' },
+        toAgent: { type: 'string', description: 'Agent receiving handoff' },
+        workProductId: { type: 'string', description: 'Work product ID created by fromAgent' },
+        handoffContext: { type: 'string', description: 'Brief context for next agent (max 50 chars)' },
+        chainPosition: { type: 'number', description: 'Position in chain (1-based)' },
+        chainLength: { type: 'number', description: 'Total agents in chain' }
+      },
+      required: ['taskId', 'fromAgent', 'toAgent', 'workProductId', 'handoffContext', 'chainPosition', 'chainLength']
+    }
+  },
+  {
+    name: 'agent_chain_get',
+    description: 'Get full agent collaboration chain for a task. Final agent uses this to retrieve all prior work products and handoff contexts before returning consolidated summary to main session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID' }
+      },
+      required: ['taskId']
+    }
   }
 ];
 
@@ -997,6 +1029,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           context: a.context as SessionGuardInput['context'] | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      // Agent Handoff Tools
+      case 'agent_handoff': {
+        const result = agentHandoff(db, {
+          taskId: a.taskId as string,
+          fromAgent: a.fromAgent as string,
+          toAgent: a.toAgent as string,
+          workProductId: a.workProductId as string,
+          handoffContext: a.handoffContext as string,
+          chainPosition: a.chainPosition as number,
+          chainLength: a.chainLength as number
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'agent_chain_get': {
+        const result = agentChainGet(db, {
+          taskId: a.taskId as string
+        });
+        return { content: [{ type: 'text', text: result ? JSON.stringify(result) : 'Task not found' }] };
       }
 
       default:

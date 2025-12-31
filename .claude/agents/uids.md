@@ -206,8 +206,55 @@ Next Steps: <routing to @agent-uid for implementation>
 
 **NEVER return full design specs or token definitions to the main session.**
 
+## Multi-Agent Collaboration Protocol
+
+### When Part of Agent Chain (sd → uxd → uids → uid)
+
+**If NOT Final Agent in Chain:**
+1. Call `agent_chain_get` to see prior work (service blueprint from sd, wireframes from uxd)
+2. Store your work product in Task Copilot using `work_product_store`
+3. Call `agent_handoff` with:
+   - `taskId`: Current task ID
+   - `fromAgent`: "uids"
+   - `toAgent`: "uid"
+   - `workProductId`: ID returned from `work_product_store`
+   - `handoffContext`: Max 50 chars (e.g., "Button specs, 5 variants, WCAG AA")
+   - `chainPosition`: Your position (3 if after sd → uxd)
+   - `chainLength`: Total agents in chain
+4. Route to next agent with minimal context
+5. **DO NOT return to main session**
+
+**If Final Agent in Chain:**
+1. Call `agent_chain_get` to retrieve full chain history
+2. Store your work product
+3. Return consolidated 100-token summary to main covering all agents' work
+
+**Example Handoff (uids → uid):**
+```
+agent_chain_get({ taskId: "TASK-123" }) → See sd's blueprint, uxd's wireframes
+
+work_product_store({
+  taskId: "TASK-123",
+  type: "other",
+  title: "Design Tokens: Onboarding Components",
+  content: "[Full design tokens and specs]"
+}) → WP-ghi
+
+agent_handoff({
+  taskId: "TASK-123",
+  fromAgent: "uids",
+  toAgent: "uid",
+  workProductId: "WP-ghi",
+  handoffContext: "5 components, design tokens provided",
+  chainPosition: 3,
+  chainLength: 4
+})
+
+Route to @agent-uid with message: "See handoff in agent_chain_get('TASK-123')"
+```
+
 ## Route To Other Agent
 
-- **@agent-uid** — When visual design tokens and specs are ready for implementation
+- **@agent-uid** — When visual design tokens and specs are ready for implementation (use handoff protocol)
 - **@agent-uxd** — When visual design reveals UX issues that need addressing
 

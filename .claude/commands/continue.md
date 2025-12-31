@@ -8,8 +8,10 @@ Load minimal context to preserve token budget:
 
 1. **From Memory Copilot** (permanent knowledge):
    ```
-   initiative_get() → currentFocus, nextAction, decisions, lessons
+   initiative_get({ mode: "lean" }) → currentFocus, nextAction, status (~150 tokens)
    ```
+
+   **Note:** Use lean mode (default) for session resume. Only use `mode: "full"` if you specifically need to review all decisions, lessons, or keyFiles.
 
 2. **From Task Copilot** (work progress):
    ```

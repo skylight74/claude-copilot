@@ -172,12 +172,16 @@ MCP server providing persistent memory across sessions.
 
 | Tool | Purpose |
 |------|---------|
-| `initiative_get` | Retrieve current initiative |
+| `initiative_get` | Retrieve current initiative (supports `mode: "lean"` for ~150 tokens or `mode: "full"` for ~370 tokens) |
 | `initiative_start` | Begin new initiative |
 | `initiative_update` | Update progress, decisions, lessons |
 | `initiative_complete` | Archive completed initiative |
 | `memory_store` | Store decisions, lessons, context |
 | `memory_search` | Semantic search across memories |
+
+**Two-Tier Resume System:**
+- **Lean mode** (default): Returns ~150 tokens - status, currentFocus, nextAction only
+- **Full mode**: Returns ~370 tokens - includes decisions, lessons, keyFiles
 
 **Configuration:**
 
@@ -239,7 +243,7 @@ MCP server for ephemeral PRD, task, and work product storage.
 
 **Location:** `mcp-servers/task-copilot/`
 
-**Purpose:** Agents store detailed work products here instead of returning them to the main session, reducing context bloat by 90-95% on average (up to 97% for single-agent tasks).
+**Purpose:** Agents store detailed work products here instead of returning them to the main session, reducing context bloat by ~94% on average (up to 96% for single-agent tasks, 85%+ for session resume, 92%+ for multi-agent collaboration).
 
 **Core Tools:**
 
@@ -257,6 +261,13 @@ MCP server for ephemeral PRD, task, and work product storage.
 | `work_product_list` | List work products for task |
 | `progress_summary` | Get compact progress overview (~200 tokens) |
 | `initiative_link` | Link Memory Copilot initiative to Task Copilot |
+
+**Agent Collaboration (Hierarchical Handoffs):**
+
+| Tool | Purpose |
+|------|---------|
+| `agent_handoff` | Record handoff between agents (50-char context, intermediate agents only) |
+| `agent_chain_get` | Retrieve full collaboration chain (final agent uses to consolidate) |
 
 **Performance Tracking:**
 
@@ -302,6 +313,7 @@ MCP server for ephemeral PRD, task, and work product storage.
 
 **Key Features:**
 
+- **Hierarchical Handoffs**: Multi-agent chains pass 50-char context between agents; only final agent returns to main (~100 tokens vs ~900)
 - **Performance Tracking**: Automatically tracks agent success rates, completion rates by task type and complexity
 - **Checkpoint System**: Create recovery points during long-running tasks; auto-expires after 24h (manual: 7d)
 - **Validation System**: Validates work products for size limits, required structure, completeness before storage
