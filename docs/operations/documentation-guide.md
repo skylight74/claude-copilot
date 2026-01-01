@@ -241,6 +241,115 @@ Then move to `_archive/` preserving directory structure.
 
 ---
 
+## Work Product Compression
+
+### Size Targets by Type
+
+| Work Product Type | Target Range | Hard Limit | Token Estimate |
+|-------------------|--------------|------------|----------------|
+| architecture | 800-1,200 words | 1,500 words | 1,120-1,680 tokens |
+| technical_design | 600-1,000 words | 1,200 words | 840-1,400 tokens |
+| implementation | 400-700 words | 900 words | 560-980 tokens |
+| test_plan | 600-900 words | 1,100 words | 840-1,260 tokens |
+| security_review | 500-800 words | 1,000 words | 700-1,120 tokens |
+| documentation | Context-dependent | 2,000 words | 2,800 tokens |
+| other | 400-600 words | 800 words | 560-840 tokens |
+
+**Token conversion:** ~1.4 tokens per word for typical technical documentation.
+
+**Hard limits:** Task Copilot validation enforces these limits. Exceeding hard limits results in rejection.
+
+### Compression Techniques
+
+| Technique | Token Savings | When to Use |
+|-----------|---------------|-------------|
+| **Tables over prose** | 25-50% | Lists, comparisons, specifications |
+| **Bullets over paragraphs** | 15-30% | Action items, key points, requirements |
+| **Omit articles in tables** | 10-15% | Column headers, table cells |
+| **Front-loaded summary** | 0% (enables skipping) | All work products |
+| **Reference over duplication** | 30-70% | Cross-referencing existing docs |
+| **Abbreviations** | 5-10% | Common terms (env, config, auth, impl) |
+
+**Table-first writing:**
+
+```markdown
+❌ Before (prose): "The authentication module supports three methods: JWT tokens for API access, OAuth2 for third-party integrations, and session cookies for web applications. JWT tokens expire after 1 hour. OAuth2 tokens expire after 30 days. Session cookies expire after 24 hours." (41 words, ~57 tokens)
+
+✅ After (table):
+
+| Auth Method | Use Case | Expiry |
+|-------------|----------|--------|
+| JWT | API access | 1 hour |
+| OAuth2 | Third-party | 30 days |
+| Session cookie | Web app | 24 hours |
+
+(28 words, ~29 tokens - 49% savings)
+```
+
+**Reference over duplication:**
+
+```markdown
+❌ Before: "The user registration flow consists of: 1. User submits email/password 2. System validates email format 3. System checks email uniqueness 4. System hashes password with bcrypt 5. System creates user record 6. System sends verification email 7. User clicks verification link 8. System activates account."
+
+✅ After: "Implements standard registration flow (see `docs/auth/registration.md`). Key validations: email format, uniqueness check. Password hashing: bcrypt (cost=10)."
+```
+
+### Attention-Optimized Structure
+
+LLM attention degrades in middle sections. Structure work products to exploit attention curve:
+
+**High Attention Zones (70-100% attention):**
+- **Start (first 200 tokens):** Executive summary, key decisions, critical findings
+- **End (last 150 tokens):** Action items, next steps, blocking issues
+
+**Low Attention Zone (30-50% attention):**
+- **Middle:** Supporting details, implementation notes, reference links
+
+**Standard work product structure:**
+
+```markdown
+# [Title]
+
+## Summary (HIGH ATTENTION)
+- Key decision: [Most important outcome]
+- Impact: [Primary effect on system]
+- Next: [Critical next action]
+
+## Decisions (HIGH ATTENTION)
+| Decision | Rationale | Impact |
+|----------|-----------|--------|
+| Choice A | Reason | Effect |
+
+## Implementation Details (LOW ATTENTION)
+[Supporting information, references, notes]
+
+## Files Modified (LOW ATTENTION)
+- `path/to/file.ts`
+
+## Next Steps (HIGH ATTENTION)
+1. [Critical action]
+2. [Blocking dependency]
+```
+
+### Heading Hierarchy for Importance
+
+Use heading levels to signal importance to both humans and LLMs:
+
+| Level | Purpose | Placement |
+|-------|---------|-----------|
+| `#` | Work product title | Once, at top |
+| `##` | Critical sections | Summary, Decisions, Next Steps |
+| `###` | Supporting sections | Implementation, Files, Notes |
+| `####` | Minor subsections | Avoid if possible |
+
+**LLM attention prioritizes:**
+1. Higher-level headings (## > ### > ####)
+2. First occurrence of each heading level
+3. Sections with tables/structured data
+4. Lists over prose
+
+---
+
 ## Checklists
 
 ### New/Updated Feature

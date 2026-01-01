@@ -500,6 +500,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isProprietary: a.isProprietary as boolean | undefined
         };
 
+        // Validate skill size (500-line maximum)
+        const lineCount = params.content.split('\n').length;
+        const MAX_LINES = 500;
+        const WARNING_THRESHOLD = 400;
+
+        if (lineCount > MAX_LINES) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Skill too large: ${lineCount} lines (max: ${MAX_LINES})
+
+To reduce skill size:
+- Split into multiple focused skills
+- Move examples to separate files
+- Remove verbose explanations
+- Use concise syntax
+
+Consider: Main skill + helper skills pattern`
+            }],
+            isError: true
+          };
+        }
+
         const result = await postgres.saveSkill(params);
 
         if (!result.success) {
@@ -512,10 +535,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Invalidate cache
         cache.invalidate(params.name);
 
+        // Build response with line count and optional warning
+        let responseText = `Skill saved successfully: ${params.name}\n\nID: ${result.data?.id}\nLine count: ${lineCount}`;
+
+        if (lineCount >= WARNING_THRESHOLD && lineCount <= MAX_LINES) {
+          responseText += `\n\n⚠️  Warning: Skill is ${lineCount} lines (approaching ${MAX_LINES} line limit).\nConsider splitting into multiple focused skills if it grows further.`;
+        }
+
         return {
           content: [{
             type: 'text',
-            text: `Skill saved successfully: ${params.name}\n\nID: ${result.data?.id}`
+            text: responseText
           }]
         };
       }

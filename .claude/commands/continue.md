@@ -18,7 +18,12 @@ Load minimal context to preserve token budget:
    progress_summary() → PRD counts, task status, recent activity
    ```
 
-3. If no initiative exists, ask user what they're working on and call `initiative_start`
+3. **From Project Constitution** (if exists):
+   - Try to read `CONSTITUTION.md` from project root
+   - If exists: Inject into context, note `[Constitution: Active]`
+   - If missing: Continue without it (graceful fallback), note `[Constitution: Not Found]`
+
+4. If no initiative exists, ask user what they're working on and call `initiative_start`
 
 **Important:** Do NOT load full task lists. Use `progress_summary` for compact status.
 
@@ -77,7 +82,11 @@ Present a compact summary (~300 tokens max):
 
 ## Step 4: Ask
 
-End with: "Protocol active. What would you like to work on?"
+End with:
+```
+Protocol active. [Constitution: Active/Not Found]
+What would you like to work on?
+```
 
 ## During Session
 

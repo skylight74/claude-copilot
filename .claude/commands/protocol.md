@@ -213,6 +213,33 @@ When falling back to base with warning:
 [PROTOCOL: EXPERIENCE | Agent: @agent-sd (base - extension unavailable) | Action: INVOKING]
 ```
 
+## Constitution Loading
+
+Before presenting the protocol acknowledgment, attempt to load the project Constitution:
+
+1. **Try to read CONSTITUTION.md** from the project root
+2. **If exists:**
+   - Inject Constitution into context
+   - Note in protocol declaration: `[Constitution: Active]`
+   - Constitution takes precedence over default behaviors
+3. **If missing:**
+   - Continue without Constitution (graceful fallback)
+   - Note in protocol declaration: `[Constitution: Not Found]`
+
+**Constitution governs:**
+- Technical constraints (non-negotiable rules)
+- Decision authority (what requires approval)
+- Quality standards (acceptance criteria)
+- Architecture principles
+- Security requirements
+- Performance budgets
+
+When routing to agents or making technical decisions, reference Constitution constraints first.
+
 ## Acknowledge
 
-Respond with: "Protocol active. Ready for your request."
+Respond with:
+```
+Protocol active. [Constitution: Active/Not Found]
+Ready for your request.
+```
