@@ -23,6 +23,42 @@ Comprehensive Claude Code documentation and learning materials. Content has been
 
 This detailed blog post on Claude Code customization patterns informed our documentation strategy and helped identify key developer needs around CLAUDE.md, skills, and subagents.
 
+### Agent Skills for Context Engineering
+**Source:** [github.com/muratcankoylan/Agent-Skills-for-Context-Engineering](https://github.com/muratcankoylan/Agent-Skills-for-Context-Engineering)
+**Author:** [muratcankoylan](https://github.com/muratcankoylan)
+
+Comprehensive research on context engineering principles including attention budget awareness, the "lost-in-the-middle" phenomenon, and progressive disclosure patterns. This research directly informed our Attention Budget guidance in agent templates and work product compression strategies.
+
+**Key Learnings:**
+- Context windows are constrained by attention mechanics, not just token capacity
+- U-shaped attention curves (high attention at start/end, low in middle)
+- Front-loading critical decisions and back-loading action items
+- Table-first writing for 25-50% token savings
+
+### Awesome Agent Skills
+**Source:** [github.com/heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills)
+**Author:** [heilcheng](https://github.com/heilcheng)
+
+Curated collection of AI agent skills with standardized SKILL.md format guidelines. This resource informed our skill size validation (500-line maximum) and progressive loading design (3-tier: index → summary → full).
+
+**Key Learnings:**
+- Skills as instruction bundles, not executable code
+- 500-line maximum for maintainability
+- Three-stage loading pattern for token efficiency
+- Community contribution patterns for skill ecosystems
+
+### Spec Kit
+**Source:** [github.com/github/spec-kit](https://github.com/github/spec-kit)
+**Author:** GitHub
+
+Open-source toolkit for Spec-Driven Development introducing the "Constitution" concept for project governance. This directly inspired our CONSTITUTION.md template for defining project values, constraints, and decision authority.
+
+**Key Learnings:**
+- Constitution as persistent governance principles
+- Separation of "what" (Constitution) from "how" (framework mechanics)
+- 7-step workflow: Constitution → Specification → Clarification → Planning → Tasks → Implementation → Validation
+- Agent-agnostic design patterns
+
 ---
 
 ## Standards & Specifications

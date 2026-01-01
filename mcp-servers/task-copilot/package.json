@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc -w",
+    "test": "npm run build && node dist/tools/full-integration.test.js",
     "test:integration": "npm run build && node dist/tools/iteration.integration.test.js",
     "test:full": "npm run build && node dist/tools/full-integration.test.js",
     "test:benchmark": "npm run build && node dist/benchmark/test.js",
