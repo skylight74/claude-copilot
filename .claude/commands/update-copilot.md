@@ -5,11 +5,22 @@ Update Claude Copilot to the latest version. This pulls the latest code and rebu
 ## Step 1: Check Current Version
 
 ```bash
-cd ~/.claude/copilot && git log --oneline -1
-git describe --tags --abbrev=0 2>/dev/null || echo "No tags"
+cd ~/.claude/copilot
+
+# Get current version from package.json if it exists
+if [ -f package.json ]; then
+  OLD_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+else
+  OLD_VERSION="unknown"
+fi
+
+echo "Current version: $OLD_VERSION"
+
+# Also show git log for reference
+git log --oneline -1
 ```
 
-Store the current version for comparison.
+Store the OLD_VERSION for comparison.
 
 ---
 
@@ -48,11 +59,22 @@ Then STOP.
 ## Step 3: Check New Version
 
 ```bash
-cd ~/.claude/copilot && git log --oneline -1
-git describe --tags --abbrev=0 2>/dev/null || echo "No tags"
+cd ~/.claude/copilot
+
+# Get new version from package.json
+if [ -f package.json ]; then
+  NEW_VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+else
+  NEW_VERSION="unknown"
+fi
+
+echo "New version: $NEW_VERSION"
+
+# Also show git log for reference
+git log --oneline -1
 ```
 
-Compare with previous version. If same, tell user "Already up to date" and skip to Step 7.
+Compare with OLD_VERSION. If same, tell user "Already up to date" and skip to Step 7.
 
 ---
 
@@ -128,29 +150,60 @@ ls -la ~/.claude/commands/
 
 ---
 
-## Step 9: Show Changelog
+## Step 9: Generate Summary (if new version)
+
+If NEW_VERSION is different from OLD_VERSION:
 
 ```bash
-cd ~/.claude/copilot && git log --oneline HEAD~5..HEAD 2>/dev/null || git log --oneline -5
+cd ~/.claude/copilot
+
+# Generate summary from CHANGELOG.md
+npm run generate-summary 2>/dev/null || echo "Warning: Could not generate summary"
 ```
 
 ---
 
 ## Step 10: Report Success
 
+```bash
+cd ~/.claude/copilot
+
+# Read version summary if available
+if [ -f CHANGELOG-SUMMARY.json ] && [ "$NEW_VERSION" != "unknown" ]; then
+  # Extract summary for the new version using node
+  SUMMARY=$(node -p "
+    try {
+      const data = require('./CHANGELOG-SUMMARY.json');
+      const version = data.versions['$NEW_VERSION'];
+      if (version) {
+        version.summary || 'See CHANGELOG.md for details';
+      } else {
+        'Version details not found in summary';
+      }
+    } catch (e) {
+      'See CHANGELOG.md for details';
+    }
+  " 2>/dev/null || echo "See CHANGELOG.md for details")
+else
+  # Fallback to git log
+  SUMMARY=$(git log --oneline HEAD~3..HEAD 2>/dev/null | head -3 | sed 's/^[a-f0-9]* /- /' || echo "Recent updates applied")
+fi
+```
+
+Tell user:
+
 ---
 
 **Claude Copilot Updated!**
 
-**Previous version:** `{{OLD_VERSION}}`
-**Current version:** `{{NEW_VERSION}}`
+**Version:** $OLD_VERSION → $NEW_VERSION
+
+**What's New:**
+$SUMMARY
 
 **What was updated:**
 - MCP servers rebuilt (copilot-memory, skills-copilot, task-copilot)
 - Global commands refreshed
-
-**Recent changes:**
-{{CHANGELOG}}
 
 **Next steps:**
 
@@ -159,6 +212,8 @@ To update your projects with the latest agents and commands:
 cd your-project
 /update-project
 ```
+
+**Full details:** `~/.claude/copilot/CHANGELOG.md`
 
 **Note:** Restart Claude Code to load the updated MCP servers.
 

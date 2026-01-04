@@ -50,3 +50,6 @@ migrate.sh
 
 # Git worktrees for parallel streams
 .claude/worktrees/
+
+# Auto-generated files
+CHANGELOG-SUMMARY.json

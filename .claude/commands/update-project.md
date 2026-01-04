@@ -271,6 +271,38 @@ done
 
 ## Step 10: Report Success
 
+```bash
+# Get Claude Copilot version
+if [ -f ~/.claude/copilot/package.json ]; then
+  COPILOT_VERSION=$(node -p "require('$HOME/.claude/copilot/package.json').version" 2>/dev/null || echo "unknown")
+else
+  COPILOT_VERSION="unknown"
+fi
+
+# Read version summary if available
+if [ -f ~/.claude/copilot/CHANGELOG-SUMMARY.json ] && [ "$COPILOT_VERSION" != "unknown" ]; then
+  # Extract summary for the version using node
+  SUMMARY=$(node -p "
+    try {
+      const data = require('$HOME/.claude/copilot/CHANGELOG-SUMMARY.json');
+      const version = data.versions['$COPILOT_VERSION'];
+      if (version) {
+        version.summary || 'See CHANGELOG.md for details';
+      } else {
+        'Version details not found in summary';
+      }
+    } catch (e) {
+      'See CHANGELOG.md for details';
+    }
+  " 2>/dev/null || echo "See CHANGELOG.md for details")
+else
+  # Fallback to git log
+  SUMMARY=$(cd ~/.claude/copilot && git log --oneline -1 2>/dev/null || echo "Latest version")
+fi
+```
+
+Tell user:
+
 ---
 
 **Project Updated!**
@@ -292,8 +324,12 @@ done
 - `.claude/skills/`
 - Existing MCP server configurations
 
-**Claude Copilot version:**
-`{{VERSION_FROM_GIT_LOG}}`
+**Claude Copilot Version:** $COPILOT_VERSION
+
+**What's New:**
+$SUMMARY
+
+**Full details:** `~/.claude/copilot/CHANGELOG.md`
 
 Your project now has the latest Claude Copilot commands and agents.
 
