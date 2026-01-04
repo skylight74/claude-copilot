@@ -17,6 +17,96 @@ These features work together to create a robust, self-improving development syst
 
 ---
 
+## Quick Start: User Examples
+
+Most features are automatic. Here's how to use the ones that require interaction:
+
+### Activation Modes (Keywords in Prompts)
+
+Control how deeply agents analyze and work by including keywords in your requests:
+
+```bash
+# Quick mode - fast iteration, minimal overhead
+/protocol quick fix the typo in the login form
+"Can you do a quick review of this PR?"
+"Fast - just update the button color to blue"
+
+# Thorough mode - deep analysis, comprehensive validation
+/protocol thorough review the authentication module
+"Do a comprehensive security audit of the API endpoints"
+"I need a detailed analysis of why the tests are failing"
+
+# Analyze mode - investigation and diagnosis focus
+/protocol analyze why the database queries are slow
+"Analyze the memory leak in the worker process"
+"Help me analyse the error patterns in the logs"
+
+# Ultrawork mode - maximum depth, no shortcuts
+/protocol ultrawork implement the payment processing system
+"This needs ultrawork attention - redesign the entire caching layer"
+```
+
+**How it works:** Keywords are detected automatically from your prompt. The agent adjusts iteration limits, validation depth, and detail level accordingly.
+
+### Quality Gates (Project Configuration)
+
+Create `.claude/quality-gates.json` in your project to enforce checks before task completion:
+
+```json
+{
+  "version": "1.0",
+  "defaultGates": ["tests_pass", "lint_clean"],
+  "gates": {
+    "tests_pass": {
+      "name": "tests_pass",
+      "description": "All tests must pass",
+      "command": "npm test",
+      "expectedExitCode": 0
+    },
+    "lint_clean": {
+      "name": "lint_clean",
+      "description": "No linting errors",
+      "command": "npm run lint",
+      "expectedExitCode": 0
+    }
+  }
+}
+```
+
+**How it works:** When agents complete tasks, these commands run automatically. If any fail, the task is marked `blocked` instead of `completed`.
+
+### Git Worktree Isolation (Parallel Streams)
+
+When working on multiple independent features simultaneously:
+
+```bash
+# Set up isolated worktrees for parallel work
+git worktree add ../project-stream-a feature-a
+git worktree add ../project-stream-b feature-b
+
+# Work on Stream A
+cd ../project-stream-a && claude
+/continue Stream-A
+
+# Work on Stream B (separate terminal)
+cd ../project-stream-b && claude
+/continue Stream-B
+```
+
+**How it works:** Each worktree has its own working directory. Changes don't conflict until you're ready to merge.
+
+### Self-Improving Memory (Review Suggestions)
+
+View agent improvement suggestions:
+
+```bash
+/memory
+```
+
+Shows pending suggestions that agents have made about improving their own instructions. Review and approve/reject as needed.
+
+---
+
 ## Features
 
 ### 1. Self-improving Memory Schema

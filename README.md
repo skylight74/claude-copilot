@@ -141,6 +141,15 @@ Then run:
 /continue Stream-B                   # Resume specific parallel stream
 ```
 
+**Control work intensity with keywords:**
+
+```bash
+/protocol quick fix the typo             # Fast, minimal overhead
+/protocol thorough review auth module    # Deep analysis, full validation
+/protocol analyze the slow database      # Investigation focus
+/protocol ultrawork payment system       # Maximum depth, no shortcuts
+```
+
 ### 5. (Optional) Shared Knowledge
 
 ```
