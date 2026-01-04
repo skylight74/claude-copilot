@@ -169,7 +169,7 @@ export async function executeQualityGates(
       enabled: true,
       command: gate.command,
       expectedExitCode: gate.expectedExitCode ?? 0,
-      timeout: gate.timeout,
+      timeout: gate.timeout ?? 60000,
       workingDirectory: gate.workingDirectory,
       env: gate.env
     });

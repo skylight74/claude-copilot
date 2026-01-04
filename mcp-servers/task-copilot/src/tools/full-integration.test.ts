@@ -297,7 +297,7 @@ async function testTaskUpdate(): Promise<void> {
     const task = await taskCreate(db, { title: 'Test Task', prdId: prd.id });
 
     // Update status
-    const updated1 = taskUpdate(db, {
+    const updated1 = await taskUpdate(db, {
       id: task.id,
       status: 'in_progress',
       notes: 'Started implementation'
@@ -312,7 +312,7 @@ async function testTaskUpdate(): Promise<void> {
     assert(task1!.notes === 'Started implementation', 'Notes should be updated');
 
     // Update to blocked with reason
-    const updated2 = taskUpdate(db, {
+    const updated2 = await taskUpdate(db, {
       id: task.id,
       status: 'blocked',
       blockedReason: 'Waiting for API key from DevOps'

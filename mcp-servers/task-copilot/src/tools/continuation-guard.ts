@@ -164,7 +164,7 @@ export function decideContinuation(
   }
 
   // Get continuation metadata from task
-  const metadata = task.metadata as TaskMetadata & { continuation?: ContinuationMetadata };
+  const metadata = (task.metadata ? JSON.parse(task.metadata) : {}) as TaskMetadata & { continuation?: ContinuationMetadata };
   const continuation = metadata.continuation || {
     continuationCount: 0,
     lastContinuedAt: '',
@@ -250,7 +250,7 @@ export function trackContinuation(
     throw new Error(`Task not found: ${taskId}`);
   }
 
-  const metadata = task.metadata as TaskMetadata & { continuation?: ContinuationMetadata };
+  const metadata = (task.metadata ? JSON.parse(task.metadata) : {}) as TaskMetadata & { continuation?: ContinuationMetadata };
   const continuation = metadata.continuation || {
     continuationCount: 0,
     lastContinuedAt: '',
@@ -269,10 +269,10 @@ export function trackContinuation(
 
   // Update task metadata
   db.updateTask(taskId, {
-    metadata: {
+    metadata: JSON.stringify({
       ...metadata,
       continuation: updatedContinuation
-    }
+    })
   });
 }
 
@@ -293,13 +293,13 @@ export function resetContinuationCounter(
     throw new Error(`Task not found: ${taskId}`);
   }
 
-  const metadata = task.metadata as TaskMetadata & { continuation?: ContinuationMetadata };
+  const metadata = (task.metadata ? JSON.parse(task.metadata) : {}) as TaskMetadata & { continuation?: ContinuationMetadata };
 
   // Remove continuation metadata
   const { continuation, ...cleanMetadata } = metadata;
 
   db.updateTask(taskId, {
-    metadata: cleanMetadata as TaskMetadata
+    metadata: JSON.stringify(cleanMetadata)
   });
 }
 
@@ -319,7 +319,7 @@ export function getContinuationStatus(
     throw new Error(`Task not found: ${taskId}`);
   }
 
-  const metadata = task.metadata as TaskMetadata & { continuation?: ContinuationMetadata };
+  const metadata = (task.metadata ? JSON.parse(task.metadata) : {}) as TaskMetadata & { continuation?: ContinuationMetadata };
   return metadata.continuation || null;
 }
 
