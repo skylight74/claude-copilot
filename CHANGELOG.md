@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-01-04
+
+### Added
+
+- **Context Engineering Features**: 6 enhancements from community research
+  - **Self-improving Memory Schema**: Agents can store improvement suggestions via `agent_improvement` memory type with structured metadata (agentId, targetSection, currentContent, suggestedContent, rationale, status)
+  - **Quality Gates Configuration**: Project-level `.claude/quality-gates.json` enforces automated checks (tests, lint, build) before task completion
+  - **Activation Mode Detection**: Auto-detects work intensity from keywords in prompts (`quick`, `thorough`, `analyze`, `ultrawork`)
+  - **Git Worktree Isolation**: Documentation and tooling for parallel stream development without merge conflicts
+  - **Continuation Enforcement**: Agents must emit `<promise>COMPLETE</promise>` signals or be marked blocked
+  - **Auto-compaction Threshold**: Agents auto-store work products at 85% context usage (3,482 tokens)
+- **New Utilities**: Context engineering support
+  - `context-monitor.ts`: Token estimation and threshold detection
+  - `mode-detection.ts`: Keyword-based activation mode parsing
+  - `continuation-guard.ts`: Promise-based completion validation
+  - `quality-gates.ts`: Gate configuration and execution
+  - `worktree-manager.ts`: Git worktree helpers for parallel streams
+- **Enhanced Documentation**
+  - `docs/ENHANCEMENT-FEATURES.md`: Comprehensive guide with user examples
+  - Quick Start examples for activation modes, quality gates, worktrees
+  - Updated README with Context Engineering feature row
+
+### Changed
+
+- All 12 agent files updated with "Automatic Context Compaction" section
+- `/continue` command enhanced with worktree management documentation
+- `/memory` command shows agent improvement suggestions
+- `/protocol` command supports activation mode keywords
+
+### Acknowledgements
+
+- [oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode) by code-yeongyu (continuation enforcement, auto-compaction patterns)
+- [mcp-shrimp-task-manager](https://github.com/cjo4m06/mcp-shrimp-task-manager) by cjo4m06 (quality gates, project rules)
+- [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) by bmad-code-org (activation modes, agent customization)
+
 ## [1.6.4] - 2025-12-31
 
 ### Security
@@ -235,6 +270,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Key Features |
 |---------|-------------|--------------|
+| **1.7.0** | 2026-01-04 | Context engineering: activation modes, auto-compaction, quality gates |
 | **1.6.0** | 2025-12-30 | Performance tracking, validation system, checkpoints, token efficiency |
 | **1.5.0** | 2024-12-XX | Simplified agents, Task Copilot migration, centralized routing |
 | **1.4.0** | 2024-11-XX | Task Copilot MCP server, 96% context reduction |
@@ -311,7 +347,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
-[unreleased]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.6.0...HEAD
+[unreleased]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Everyone-Needs-A-Copilot/claude-copilot/compare/v1.3.0...v1.4.0
