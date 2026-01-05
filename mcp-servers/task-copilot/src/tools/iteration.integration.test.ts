@@ -91,7 +91,10 @@ function setupTestTask(db: DatabaseClient): string {
     notes: null,
     metadata: '{}',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    archived: 0,
+    archived_at: null,
+    archived_by_initiative_id: null
   };
   db.insertTask(task);
 

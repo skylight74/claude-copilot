@@ -90,7 +90,10 @@ export async function taskCreate(
     notes: null,
     metadata: JSON.stringify(metadata),
     created_at: now,
-    updated_at: now
+    updated_at: now,
+    archived: 0,
+    archived_at: null,
+    archived_by_initiative_id: null
   };
 
   db.insertTask(task);
@@ -134,6 +137,17 @@ export async function taskUpdate(
 ): Promise<{ id: string; status: TaskStatus; updatedAt: string } | null> {
   const task = db.getTask(input.id);
   if (!task) return null;
+
+  // Block updates to archived tasks
+  if (task.archived === 1) {
+    const metadata = JSON.parse(task.metadata) as TaskMetadata;
+    throw new Error(
+      `Cannot update archived task ${input.id}. ` +
+      `This task belongs to stream "${metadata.streamId || 'unknown'}" which was archived ` +
+      `when switching to initiative ${task.archived_by_initiative_id}. ` +
+      `Use stream_unarchive to restore the stream first.`
+    );
+  }
 
   const now = new Date().toISOString();
   const updates: Partial<TaskRow> = {

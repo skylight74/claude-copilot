@@ -69,6 +69,12 @@ When a stream argument is provided:
    stream_list()
    ```
 
+   **Note:** By default, `stream_list()` excludes archived streams. Archived streams are tasks from previous initiatives that were automatically archived when switching initiatives. If you need to resume an archived stream, use:
+   ```
+   stream_list({ includeArchived: true })
+   stream_unarchive({ streamId: "Stream-X" })
+   ```
+
 2. **If streams exist**, present formatted list:
    ```
    Available streams:

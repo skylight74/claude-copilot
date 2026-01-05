@@ -178,6 +178,16 @@ CREATE INDEX IF NOT EXISTS idx_handoffs_task ON agent_handoffs(task_id, chain_po
 CREATE INDEX IF NOT EXISTS idx_handoffs_agents ON agent_handoffs(from_agent, to_agent);
 `;
 
+// Migration SQL for version 6: Stream Archival
+const MIGRATION_V6_SQL = `
+-- Add archival support to tasks
+ALTER TABLE tasks ADD COLUMN archived INTEGER DEFAULT 0;
+ALTER TABLE tasks ADD COLUMN archived_at TEXT DEFAULT NULL;
+ALTER TABLE tasks ADD COLUMN archived_by_initiative_id TEXT DEFAULT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -185,7 +195,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -267,6 +277,15 @@ export class DatabaseClient {
       this.db.exec(MIGRATION_V5_SQL);
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
         5,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v6: Stream Archival
+    if (currentVersion < 6) {
+      this.db.exec(MIGRATION_V6_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        6,
         new Date().toISOString()
       );
     }
@@ -361,8 +380,8 @@ export class DatabaseClient {
   // Task operations
   insertTask(task: TaskRow): void {
     this.db.prepare(`
-      INSERT INTO tasks (id, prd_id, parent_id, title, description, assigned_agent, status, blocked_reason, notes, metadata, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, prd_id, parent_id, title, description, assigned_agent, status, blocked_reason, notes, metadata, created_at, updated_at, archived, archived_at, archived_by_initiative_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.id,
       task.prd_id,
@@ -375,7 +394,10 @@ export class DatabaseClient {
       task.notes,
       task.metadata,
       task.created_at,
-      task.updated_at
+      task.updated_at,
+      task.archived,
+      task.archived_at,
+      task.archived_by_initiative_id
     );
   }
 
@@ -942,6 +964,61 @@ export class DatabaseClient {
       chain_length: number;
       created_at: string;
     }>;
+  }
+
+  // ============================================================================
+  // STREAM ARCHIVAL
+  // ============================================================================
+
+  /**
+   * Archive all tasks with a streamId that belong to a specific initiative
+   * Returns count of archived tasks
+   */
+  archiveStreamsForInitiative(currentInitiativeId: string, newInitiativeId: string): number {
+    const now = new Date().toISOString();
+
+    // Archive tasks that have streamId and belong to current initiative (via PRD join)
+    const result1 = this.db.prepare(`
+      UPDATE tasks
+      SET archived = 1,
+          archived_at = ?,
+          archived_by_initiative_id = ?
+      WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+        AND prd_id IN (
+          SELECT id FROM prds WHERE initiative_id = ?
+        )
+        AND archived = 0
+    `).run(now, newInitiativeId, currentInitiativeId);
+
+    // Also archive orphaned stream tasks (no PRD) created before initiative switch
+    const result2 = this.db.prepare(`
+      UPDATE tasks
+      SET archived = 1,
+          archived_at = ?,
+          archived_by_initiative_id = ?
+      WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+        AND prd_id IS NULL
+        AND archived = 0
+    `).run(now, newInitiativeId);
+
+    return result1.changes + result2.changes;
+  }
+
+  /**
+   * Unarchive all tasks for a specific streamId
+   * Returns count of unarchived tasks
+   */
+  unarchiveStream(streamId: string): number {
+    const result = this.db.prepare(`
+      UPDATE tasks
+      SET archived = 0,
+          archived_at = NULL,
+          archived_by_initiative_id = NULL
+      WHERE json_extract(metadata, '$.streamId') = ?
+        AND archived = 1
+    `).run(streamId);
+
+    return result.changes;
   }
 
   close(): void {

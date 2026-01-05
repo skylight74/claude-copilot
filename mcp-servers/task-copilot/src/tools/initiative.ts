@@ -20,6 +20,7 @@ import type {
 
 /**
  * Link current initiative from Memory Copilot to Task Copilot workspace
+ * Auto-archives streams from previous initiative when switching
  */
 export function initiativeLink(
   db: DatabaseClient,
@@ -27,9 +28,33 @@ export function initiativeLink(
 ): InitiativeLinkOutput {
   const now = new Date().toISOString();
 
+  // Get current initiative before linking new one
+  const currentInitiative = db.getCurrentInitiative();
+
   // Check if initiative already exists
   const existing = db.getInitiative(input.initiativeId);
   const workspaceCreated = !existing;
+
+  // Auto-archive streams if switching to a different initiative
+  let archivedStreamsCount = 0;
+  if (currentInitiative && currentInitiative.id !== input.initiativeId) {
+    archivedStreamsCount = db.archiveStreamsForInitiative(
+      currentInitiative.id,
+      input.initiativeId
+    );
+
+    if (archivedStreamsCount > 0) {
+      // Log stream archival activity
+      db.insertActivity({
+        id: uuidv4(),
+        initiative_id: currentInitiative.id,
+        type: 'streams_auto_archived',
+        entity_id: currentInitiative.id,
+        summary: `Auto-archived ${archivedStreamsCount} stream tasks due to initiative switch to ${input.initiativeId}`,
+        created_at: now
+      });
+    }
+  }
 
   // Upsert the initiative
   db.upsertInitiative({
@@ -55,7 +80,8 @@ export function initiativeLink(
   return {
     initiativeId: input.initiativeId,
     workspaceCreated,
-    dbPath: db.getWorkspaceId()
+    dbPath: db.getWorkspaceId(),
+    archivedStreamsCount
   };
 }
 

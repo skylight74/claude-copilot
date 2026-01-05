@@ -20,7 +20,7 @@ import { initiativeLink, initiativeArchive, initiativeWipe, progressSummary } fr
 import { agentPerformanceGet } from './tools/performance.js';
 import { checkpointCreate, checkpointGet, checkpointResume, checkpointList, checkpointCleanup } from './tools/checkpoint.js';
 import { iterationStart, iterationValidate, iterationNext, iterationComplete } from './tools/iteration.js';
-import { streamList, streamGet, streamConflictCheck } from './tools/stream.js';
+import { streamList, streamGet, streamConflictCheck, streamUnarchive, streamArchiveAll } from './tools/stream.js';
 import {
   evaluateStopHooks,
   createDefaultHook,
@@ -60,6 +60,8 @@ import type {
   StreamListInput,
   StreamGetInput,
   StreamConflictCheckInput,
+  StreamUnarchiveInput,
+  StreamArchiveAllInput,
   TaskStatus,
   PrdStatus,
   WorkProductType,
@@ -649,23 +651,25 @@ const TOOLS = [
   // Stream Tools (Command Arguments & Independent Streams)
   {
     name: 'stream_list',
-    description: 'List all work streams for an initiative. Groups tasks by streamId and returns status for each stream.',
+    description: 'List all work streams for an initiative. Groups tasks by streamId and returns status for each stream. By default, excludes archived streams.',
     inputSchema: {
       type: 'object',
       properties: {
         initiativeId: { type: 'string', description: 'Filter by initiative ID (default: current initiative)' },
-        prdId: { type: 'string', description: 'Filter by PRD ID' }
+        prdId: { type: 'string', description: 'Filter by PRD ID' },
+        includeArchived: { type: 'boolean', description: 'Include archived streams (default: false)' }
       }
     }
   },
   {
     name: 'stream_get',
-    description: 'Get all tasks for a specific stream by streamId',
+    description: 'Get all tasks for a specific stream by streamId. Returns null if stream is archived unless includeArchived=true.',
     inputSchema: {
       type: 'object',
       properties: {
         streamId: { type: 'string', description: 'Stream ID (e.g., "Stream-A", "Stream-B")' },
-        initiativeId: { type: 'string', description: 'Filter by initiative ID (optional)' }
+        initiativeId: { type: 'string', description: 'Filter by initiative ID (optional)' },
+        includeArchived: { type: 'boolean', description: 'Include archived stream (default: false)' }
       },
       required: ['streamId']
     }
@@ -681,6 +685,30 @@ const TOOLS = [
         initiativeId: { type: 'string', description: 'Filter by initiative ID (optional)' }
       },
       required: ['files']
+    }
+  },
+  {
+    name: 'stream_unarchive',
+    description: 'Unarchive a stream and link it to current or specified initiative. Use when you want to resume work on an archived stream.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        streamId: { type: 'string', description: 'Stream ID to unarchive (e.g., "Stream-A")' },
+        initiativeId: { type: 'string', description: 'Initiative ID to link stream to (default: current initiative)' }
+      },
+      required: ['streamId']
+    }
+  },
+  {
+    name: 'stream_archive_all',
+    description: 'Archive all active streams. One-time cleanup for legacy data before auto-archive feature. Requires confirm: true for safety.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        confirm: { type: 'boolean', description: 'Safety flag - must be true to proceed' },
+        initiativeId: { type: 'string', description: 'Optional: only archive streams from specific initiative' }
+      },
+      required: ['confirm']
     }
   }
 ];
@@ -1097,7 +1125,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'stream_list': {
         const result = streamList(db, {
           initiativeId: a.initiativeId as string | undefined,
-          prdId: a.prdId as string | undefined
+          prdId: a.prdId as string | undefined,
+          includeArchived: a.includeArchived as boolean | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -1105,7 +1134,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'stream_get': {
         const result = streamGet(db, {
           streamId: a.streamId as string,
-          initiativeId: a.initiativeId as string | undefined
+          initiativeId: a.initiativeId as string | undefined,
+          includeArchived: a.includeArchived as boolean | undefined
         });
         return { content: [{ type: 'text', text: result ? JSON.stringify(result) : 'Stream not found' }] };
       }
@@ -1114,6 +1144,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = streamConflictCheck(db, {
           files: a.files as string[],
           excludeStreamId: a.excludeStreamId as string | undefined,
+          initiativeId: a.initiativeId as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'stream_unarchive': {
+        const result = streamUnarchive(db, {
+          streamId: a.streamId as string,
+          initiativeId: a.initiativeId as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'stream_archive_all': {
+        const result = streamArchiveAll(db, {
+          confirm: a.confirm as boolean,
           initiativeId: a.initiativeId as string | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };

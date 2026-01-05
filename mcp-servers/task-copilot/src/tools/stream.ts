@@ -65,6 +65,7 @@
  * - Stream-B depends on Stream-A (foundation) ✅ (valid)
  */
 
+import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseClient } from '../database.js';
 import type {
   StreamListInput,
@@ -73,6 +74,8 @@ import type {
   StreamGetOutput,
   StreamConflictCheckInput,
   StreamConflictCheckOutput,
+  StreamArchiveAllInput,
+  StreamArchiveAllOutput,
   StreamInfo,
   Task,
   TaskStatus,
@@ -130,7 +133,7 @@ export function validateStreamDependencies(
  * List all streams for an initiative
  */
 export function streamList(db: DatabaseClient, input: StreamListInput): StreamListOutput {
-  const { initiativeId, prdId } = input;
+  const { initiativeId, prdId, includeArchived = false } = input;
 
   // Get current initiative if not specified
   let targetInitiativeId = initiativeId;
@@ -161,6 +164,12 @@ export function streamList(db: DatabaseClient, input: StreamListInput): StreamLi
   }
 
   sql += ' AND json_extract(t.metadata, \'$.streamId\') IS NOT NULL';
+
+  // Filter archived streams unless explicitly included
+  if (!includeArchived) {
+    sql += ' AND (t.archived IS NULL OR t.archived = 0)';
+  }
+
   sql += ' ORDER BY t.created_at ASC';
 
   const tasks = db.getDb().prepare(sql).all(...params) as Array<{
@@ -272,7 +281,7 @@ export function streamList(db: DatabaseClient, input: StreamListInput): StreamLi
  * Get all tasks for a specific stream
  */
 export function streamGet(db: DatabaseClient, input: StreamGetInput): StreamGetOutput | null {
-  const { streamId, initiativeId } = input;
+  const { streamId, initiativeId, includeArchived = false } = input;
 
   // Build query
   let sql = `
@@ -293,6 +302,11 @@ export function streamGet(db: DatabaseClient, input: StreamGetInput): StreamGetO
       WHERE json_extract(t.metadata, '$.streamId') = ?
     `;
     params.push(streamId);
+  }
+
+  // Filter archived unless explicitly included
+  if (!includeArchived) {
+    sql += ' AND (t.archived IS NULL OR t.archived = 0)';
   }
 
   sql += ' ORDER BY t.created_at ASC';
@@ -358,6 +372,12 @@ export function streamGet(db: DatabaseClient, input: StreamGetInput): StreamGetO
   const worktreePath = tasks[0]?.metadata?.worktreePath;
   const branchName = tasks[0]?.metadata?.branchName;
 
+  // Check if stream is archived (all tasks have archived flag set)
+  const firstTaskRow = taskRows[0];
+  const archived = firstTaskRow && (firstTaskRow as any).archived === 1;
+  const archivedAt = archived ? (firstTaskRow as any).archived_at : undefined;
+  const archivedByInitiativeId = archived ? (firstTaskRow as any).archived_by_initiative_id : undefined;
+
   return {
     streamId,
     streamName,
@@ -366,7 +386,145 @@ export function streamGet(db: DatabaseClient, input: StreamGetInput): StreamGetO
     dependencies,
     status,
     worktreePath,
-    branchName
+    branchName,
+    archived,
+    archivedAt,
+    archivedByInitiativeId
+  };
+}
+
+/**
+ * Unarchive a stream and link it to current or specified initiative
+ */
+export function streamUnarchive(
+  db: DatabaseClient,
+  input: { streamId: string; initiativeId?: string }
+): { streamId: string; tasksUnarchived: number; newInitiativeId: string } {
+  const { streamId, initiativeId } = input;
+
+  // Get current initiative if not specified
+  let targetInitiativeId = initiativeId;
+  if (!targetInitiativeId) {
+    const currentInitiative = db.getCurrentInitiative();
+    if (!currentInitiative) {
+      throw new Error('No current initiative found. Please specify initiativeId or link an initiative first.');
+    }
+    targetInitiativeId = currentInitiative.id;
+  }
+
+  // Unarchive the stream
+  const tasksUnarchived = db.unarchiveStream(streamId);
+
+  if (tasksUnarchived === 0) {
+    throw new Error(`No archived tasks found for stream: ${streamId}`);
+  }
+
+  // Log activity
+  const now = new Date().toISOString();
+  db.insertActivity({
+    id: uuidv4(),
+    initiative_id: targetInitiativeId,
+    type: 'stream_unarchived',
+    entity_id: streamId,
+    summary: `Unarchived stream ${streamId} (${tasksUnarchived} tasks) and linked to initiative ${targetInitiativeId}`,
+    created_at: now
+  });
+
+  return {
+    streamId,
+    tasksUnarchived,
+    newInitiativeId: targetInitiativeId
+  };
+}
+
+/**
+ * Archive all active streams (one-time cleanup for legacy data)
+ *
+ * Used after updating to auto-archive feature to clean up existing streams
+ * from old initiatives. Requires confirm=true as a safety check.
+ */
+export function streamArchiveAll(
+  db: DatabaseClient,
+  input: StreamArchiveAllInput
+): StreamArchiveAllOutput {
+  const { confirm, initiativeId } = input;
+
+  // Safety check
+  if (!confirm) {
+    throw new Error('Must set confirm=true to archive all streams');
+  }
+
+  const now = new Date().toISOString();
+
+  // Get current initiative if not specified
+  let targetInitiativeId = initiativeId;
+  if (!targetInitiativeId) {
+    const currentInitiative = db.getCurrentInitiative();
+    if (currentInitiative) {
+      targetInitiativeId = currentInitiative.id;
+    }
+  }
+
+  // Build query to archive tasks with streamIds
+  let sql = `
+    UPDATE tasks
+    SET archived = 1,
+        archived_at = ?,
+        archived_by_initiative_id = ?
+    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+      AND (archived IS NULL OR archived = 0)
+  `;
+  const params: unknown[] = [now, targetInitiativeId || 'manual'];
+
+  if (targetInitiativeId) {
+    sql += `
+      AND prd_id IN (
+        SELECT id FROM prds WHERE initiative_id = ?
+      )
+    `;
+    params.push(targetInitiativeId);
+  }
+
+  const result = db.getDb().prepare(sql).run(...params);
+  const tasksArchived = result.changes || 0;
+
+  // Count unique streams archived
+  let countSql = `
+    SELECT COUNT(DISTINCT json_extract(metadata, '$.streamId')) as count
+    FROM tasks
+    WHERE archived = 1
+      AND archived_at = ?
+  `;
+  const countParams: unknown[] = [now];
+
+  if (targetInitiativeId) {
+    countSql += `
+      AND prd_id IN (
+        SELECT id FROM prds WHERE initiative_id = ?
+      )
+    `;
+    countParams.push(targetInitiativeId);
+  }
+
+  const countResult = db.getDb().prepare(countSql).get(...countParams) as { count: number };
+  const streamsArchived = countResult.count;
+
+  // Log activity
+  if (targetInitiativeId) {
+    db.insertActivity({
+      id: uuidv4(),
+      initiative_id: targetInitiativeId,
+      type: 'stream_archive_all',
+      entity_id: 'bulk',
+      summary: `Archived all streams (${streamsArchived} streams, ${tasksArchived} tasks)`,
+      created_at: now
+    });
+  }
+
+  return {
+    streamsArchived,
+    tasksArchived,
+    archivedAt: now
   };
 }
 

@@ -125,6 +125,9 @@ export interface TaskRow {
   metadata: string;
   created_at: string;
   updated_at: string;
+  archived: number;
+  archived_at: string | null;
+  archived_by_initiative_id: string | null;
 }
 
 export interface WorkProductRow {
@@ -222,6 +225,7 @@ export interface InitiativeLinkOutput {
   initiativeId: string;
   workspaceCreated: boolean;
   dbPath: string;
+  archivedStreamsCount?: number;
 }
 
 export interface InitiativeArchiveInput {
@@ -699,6 +703,7 @@ export interface AgentChainGetOutput {
 export interface StreamListInput {
   initiativeId?: string;
   prdId?: string;
+  includeArchived?: boolean;
 }
 
 export interface StreamInfo {
@@ -724,6 +729,7 @@ export interface StreamListOutput {
 export interface StreamGetInput {
   streamId: string;
   initiativeId?: string;
+  includeArchived?: boolean;
 }
 
 export interface StreamGetOutput {
@@ -736,6 +742,10 @@ export interface StreamGetOutput {
   // Git worktree isolation
   worktreePath?: string;
   branchName?: string;
+  // Archival metadata
+  archived?: boolean;
+  archivedAt?: string;
+  archivedByInitiativeId?: string;
 }
 
 export interface StreamConflictCheckInput {
@@ -754,4 +764,26 @@ export interface StreamConflictCheckOutput {
     taskTitle: string;
     taskStatus: TaskStatus;
   }>;
+}
+
+export interface StreamUnarchiveInput {
+  streamId: string;
+  initiativeId?: string;
+}
+
+export interface StreamUnarchiveOutput {
+  streamId: string;
+  tasksUnarchived: number;
+  newInitiativeId: string;
+}
+
+export interface StreamArchiveAllInput {
+  confirm: boolean; // Safety flag - must be true to proceed
+  initiativeId?: string; // Optional: only archive streams from specific initiative
+}
+
+export interface StreamArchiveAllOutput {
+  streamsArchived: number;
+  tasksArchived: number;
+  archivedAt: string;
 }
