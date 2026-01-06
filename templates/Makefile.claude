@@ -1,0 +1,450 @@
+# Claude Copilot + Git Flow Makefile Template
+# Combines session management with full git-flow workflow
+#
+# Usage: Copy to your project and customize the project-specific sections
+
+#=============================================================================
+# PROJECT CONFIGURATION - Customize these for your project
+#=============================================================================
+PROJECT_NAME ?= $(shell basename $(CURDIR))
+WORKSPACE_BASE ?= $(PROJECT_NAME)
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo "0.0.1")
+
+# Docker settings (customize for your project)
+REGISTRY ?= docker.io
+IMAGE_NAME ?= $(PROJECT_NAME)
+
+# Paths
+CLAUDE_MEMORY_PATH ?= $(HOME)/.claude/memory
+GOPATH ?= $(shell go env GOPATH)
+
+# Version extraction
+MAJOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1)
+MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f2)
+PATCH_VERSION := $(shell echo $(VERSION) | cut -d. -f3)
+
+#=============================================================================
+# HELP
+#=============================================================================
+.PHONY: help
+help:
+	@echo "$(PROJECT_NAME) Makefile"
+	@echo ""
+	@echo "=== Claude Session Management ==="
+	@echo "  orchestrator       Start orchestrator session (coordinates workers)"
+	@echo "  worker TASK=name   Start worker on existing feature/name branch"
+	@echo "  worker-new TASK=n  Create new feature branch and start worker"
+	@echo "  status             Show git branches and session info"
+	@echo "  branches           Show all feature branches with details"
+	@echo ""
+	@echo "=== Version Management ==="
+	@echo "  version-get        Display current version"
+	@echo "  version-bump-major Bump major version (X.0.0)"
+	@echo "  version-bump-minor Bump minor version (0.X.0)"
+	@echo "  version-bump-patch Bump patch version (0.0.X)"
+	@echo "  release-notes      Generate release notes"
+	@echo ""
+	@echo "=== Git Flow ==="
+	@echo "  gitflow-init       Initialize git-flow"
+	@echo "  feature-start      Start a new feature"
+	@echo "  feature-finish     Finish current feature (merge to develop)"
+	@echo "  release-start      Start a new release"
+	@echo "  release-finish     Finish a release"
+	@echo "  hotfix-start       Start a new hotfix"
+	@echo "  hotfix-finish      Finish a hotfix"
+	@echo ""
+	@echo "=== Branch Management ==="
+	@echo "  archive-old-branches    Archive non-git-flow branches"
+	@echo "  delete-archived-branches Delete archived branches"
+	@echo ""
+	@echo "=== Development ==="
+	@echo "  setup              Set up development environment"
+	@echo "  verify             Run all verification checks"
+	@echo "  git-hooks          Install Git hooks"
+	@echo ""
+	@echo "=== Docker (customize for your project) ==="
+	@echo "  docker-build       Build Docker image"
+	@echo "  docker-push        Push Docker image to registry"
+	@echo "  release-deploy     Build, tag, and deploy a release"
+
+#=============================================================================
+# CLAUDE SESSION MANAGEMENT
+#=============================================================================
+.PHONY: orchestrator worker worker-new status branches
+
+# Orchestrator session - owns the main initiative
+orchestrator:
+	@echo "═══════════════════════════════════════════════════"
+	@echo "  Starting ORCHESTRATOR Session"
+	@echo "  Project: $(PROJECT_NAME)"
+	@echo "  Workspace: $(WORKSPACE_BASE)"
+	@echo "  Version: $(VERSION)"
+	@echo "═══════════════════════════════════════════════════"
+	@echo ""
+	@echo "Tip: Use /orchestrator to start coordinating"
+	@echo ""
+	@WORKSPACE_ID="$(WORKSPACE_BASE)" claude
+
+# Worker on existing branch
+worker:
+ifndef TASK
+	$(error TASK is required. Usage: make worker TASK=feature-name)
+endif
+	@echo "═══════════════════════════════════════════════════"
+	@echo "  Starting WORKER Session"
+	@echo "  Task: $(TASK)"
+	@echo "  Workspace: $(WORKSPACE_BASE)"
+	@echo "═══════════════════════════════════════════════════"
+	@if git show-ref --verify --quiet refs/heads/feature/$(TASK); then \
+		git checkout feature/$(TASK); \
+		echo "Switched to branch: feature/$(TASK)"; \
+	else \
+		echo "Branch feature/$(TASK) not found."; \
+		echo "Use 'make worker-new TASK=$(TASK)' to create it."; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Tip: Use /worker to start working"
+	@echo ""
+	@WORKSPACE_ID="$(WORKSPACE_BASE)" claude
+
+# Worker with new branch
+worker-new:
+ifndef TASK
+	$(error TASK is required. Usage: make worker-new TASK=feature-name)
+endif
+	@echo "═══════════════════════════════════════════════════"
+	@echo "  Creating Feature Branch & Starting WORKER Session"
+	@echo "  Task: $(TASK)"
+	@echo "  Workspace: $(WORKSPACE_BASE)"
+	@echo "═══════════════════════════════════════════════════"
+	@git checkout develop 2>/dev/null || git checkout main
+	@git pull
+	@git checkout -b feature/$(TASK)
+	@echo "Created branch: feature/$(TASK)"
+	@echo ""
+	@echo "Tip: Use /worker to start working"
+	@echo ""
+	@WORKSPACE_ID="$(WORKSPACE_BASE)" claude
+
+# Show status
+status:
+	@echo "═══════════════════════════════════════════════════"
+	@echo "  Project: $(PROJECT_NAME)"
+	@echo "  Version: $(VERSION)"
+	@echo "  Workspace: $(WORKSPACE_BASE)"
+	@echo "═══════════════════════════════════════════════════"
+	@echo ""
+	@echo "=== Current Branch ==="
+	@git branch --show-current
+	@echo ""
+	@echo "=== All Branches ==="
+	@git branch -a
+	@echo ""
+	@echo "=== Recent Commits ==="
+	@git log --oneline -5
+	@echo ""
+	@echo "=== Feature Branches Status ==="
+	@for branch in $$(git branch | grep feature/ | tr -d ' '); do \
+		commits=$$(git log develop..$$branch --oneline 2>/dev/null | wc -l); \
+		echo "  $$branch ($$commits commits ahead)"; \
+	done || echo "  No feature branches"
+
+# Show feature branches only
+branches:
+	@echo "=== Feature Branches ==="
+	@git branch | grep feature/ || echo "No feature branches"
+	@echo ""
+	@echo "=== Branch Details ==="
+	@for branch in $$(git branch | grep feature/ | tr -d ' '); do \
+		echo ""; \
+		echo "$$branch:"; \
+		git log develop..$$branch --oneline 2>/dev/null | head -5 || echo "  (no commits ahead of develop)"; \
+	done
+
+#=============================================================================
+# VERSION MANAGEMENT
+#=============================================================================
+.PHONY: version-get version-bump-major version-bump-minor version-bump-patch version-init
+
+version-init:
+	@if [ ! -f VERSION ]; then \
+		echo "0.0.1" > VERSION; \
+		echo "Created VERSION file with 0.0.1"; \
+	else \
+		echo "VERSION file already exists: $$(cat VERSION)"; \
+	fi
+
+version-get:
+	@echo "Current version: $(VERSION)"
+	@echo "  Major: $(MAJOR_VERSION)"
+	@echo "  Minor: $(MINOR_VERSION)"
+	@echo "  Patch: $(PATCH_VERSION)"
+
+version-bump-major:
+	@echo "Bumping major version..."
+	@NEW_MAJOR=$$(( $(MAJOR_VERSION) + 1 )); \
+	echo "$${NEW_MAJOR}.0.0" > VERSION; \
+	echo "Version updated to $$(cat VERSION)"
+
+version-bump-minor:
+	@echo "Bumping minor version..."
+	@NEW_MINOR=$$(( $(MINOR_VERSION) + 1 )); \
+	echo "$(MAJOR_VERSION).$${NEW_MINOR}.0" > VERSION; \
+	echo "Version updated to $$(cat VERSION)"
+
+version-bump-patch:
+	@echo "Bumping patch version..."
+	@NEW_PATCH=$$(( $(PATCH_VERSION) + 1 )); \
+	echo "$(MAJOR_VERSION).$(MINOR_VERSION).$${NEW_PATCH}" > VERSION; \
+	echo "Version updated to $$(cat VERSION)"
+
+#=============================================================================
+# GIT FLOW INTEGRATION
+#=============================================================================
+.PHONY: gitflow-init feature-start feature-finish release-start release-finish hotfix-start hotfix-finish
+
+gitflow-init:
+	@if ! command -v git-flow &> /dev/null; then \
+		echo "git-flow not found. Please install it:"; \
+		echo "  Ubuntu/Debian: sudo apt-get install git-flow"; \
+		echo "  Arch: sudo pacman -S git-flow"; \
+		echo "  macOS: brew install git-flow"; \
+		exit 1; \
+	fi
+	@echo "Initializing git-flow..."
+	@git flow init -d -f -p main -M "v"
+
+# Feature management
+feature-start:
+	@read -p "Enter feature name: " name; \
+	git flow feature start $$name
+
+feature-finish:
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	feature=$$(echo $$branch | sed -n 's/feature\///p'); \
+	if [ -z "$$feature" ]; then \
+		echo "Not on a feature branch"; \
+		exit 1; \
+	fi; \
+	echo "Finishing feature $$feature (keeping branch)..."; \
+	current_branch=$$branch; \
+	git checkout develop; \
+	git merge --no-ff $$current_branch -m "Merge branch '$$current_branch' into develop"; \
+	echo "Feature $$feature merged into develop."; \
+	echo "To delete the feature branch: git branch -d $$current_branch"
+
+# Release management
+release-start:
+	@if git diff-index --quiet HEAD --; then \
+		read -p "Choose version bump type [major|minor|patch]: " bump_type; \
+		if [ "$$bump_type" = "major" ]; then \
+			make version-bump-major; \
+		elif [ "$$bump_type" = "minor" ]; then \
+			make version-bump-minor; \
+		elif [ "$$bump_type" = "patch" ]; then \
+			make version-bump-patch; \
+		else \
+			echo "Invalid version bump type. Use major, minor, or patch."; \
+			exit 1; \
+		fi; \
+		NEW_VERSION=$$(cat VERSION); \
+		git add VERSION; \
+		git commit -m "Bump version to $$NEW_VERSION"; \
+		echo "Starting release $$NEW_VERSION..."; \
+		git flow release start $$NEW_VERSION; \
+	else \
+		echo "Working tree has unstaged changes. Commit or stash them first."; \
+		exit 1; \
+	fi
+
+release-finish:
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	release=$$(echo $$branch | sed -n 's/release\///p'); \
+	if [ -z "$$release" ]; then \
+		echo "Not on a release branch"; \
+		exit 1; \
+	fi; \
+	echo "Finishing release $$release..."; \
+	git flow release finish -m "Release $$release" $$release || { \
+		echo "Error during git flow finish. Resolve conflicts and try again."; \
+		exit 1; \
+	}; \
+	echo "Release $$release completed. Pushing..."; \
+	git push origin main develop --tags || { \
+		echo "Push failed. Run manually: git push origin main develop --tags"; \
+	}; \
+	git checkout develop
+
+# Hotfix management
+hotfix-start:
+	@make version-bump-patch; \
+	NEW_VERSION=$$(cat VERSION); \
+	echo "Starting hotfix $$NEW_VERSION..."; \
+	git add VERSION; \
+	git commit -m "Bump version to $$NEW_VERSION"; \
+	git flow hotfix start $$NEW_VERSION
+
+hotfix-finish:
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	hotfix=$$(echo $$branch | sed -n 's/hotfix\///p'); \
+	if [ -z "$$hotfix" ]; then \
+		echo "Not on a hotfix branch"; \
+		exit 1; \
+	fi; \
+	echo "Finishing hotfix $$hotfix..."; \
+	git flow hotfix finish -m "Hotfix $$hotfix" $$hotfix || { \
+		echo "Error during git flow finish. Resolve conflicts and try again."; \
+		exit 1; \
+	}; \
+	echo "Hotfix $$hotfix completed. Pushing..."; \
+	git push origin main develop --tags || { \
+		echo "Push failed. Run manually: git push origin main develop --tags"; \
+	}; \
+	git checkout develop
+
+#=============================================================================
+# RELEASE NOTES
+#=============================================================================
+.PHONY: release-notes
+
+release-notes:
+	@echo "Generating release notes for version $(VERSION)..."
+	@CURRENT_VERSION=$(VERSION); \
+	CURRENT_TAG="v$$CURRENT_VERSION"; \
+	PREV_VERSION=$$(git tag -l "v*" | grep -v "$$CURRENT_TAG" | sort -V | tail -n 1); \
+	if [ -z "$$PREV_VERSION" ]; then \
+		echo "No previous version tag found. Showing all commits..."; \
+		echo "# Release Notes for v$(VERSION)" > RELEASE_NOTES.md; \
+		echo "" >> RELEASE_NOTES.md; \
+		echo "## Changes" >> RELEASE_NOTES.md; \
+		git log --pretty=format:"* %s (%h) - %an" --max-count=50 >> RELEASE_NOTES.md; \
+	else \
+		echo "Comparing $$PREV_VERSION..HEAD"; \
+		echo "# Release Notes for v$(VERSION)" > RELEASE_NOTES.md; \
+		echo "" >> RELEASE_NOTES.md; \
+		echo "## Changes since $$PREV_VERSION" >> RELEASE_NOTES.md; \
+		echo "" >> RELEASE_NOTES.md; \
+		FEATURES=$$(git log $$PREV_VERSION..HEAD --pretty=format:"%s" | grep -iE "^feat" | sed 's/^/- /'); \
+		if [ -n "$$FEATURES" ]; then \
+			echo "### Features" >> RELEASE_NOTES.md; \
+			echo "$$FEATURES" >> RELEASE_NOTES.md; \
+			echo "" >> RELEASE_NOTES.md; \
+		fi; \
+		FIXES=$$(git log $$PREV_VERSION..HEAD --pretty=format:"%s" | grep -iE "^fix" | sed 's/^/- /'); \
+		if [ -n "$$FIXES" ]; then \
+			echo "### Bug Fixes" >> RELEASE_NOTES.md; \
+			echo "$$FIXES" >> RELEASE_NOTES.md; \
+			echo "" >> RELEASE_NOTES.md; \
+		fi; \
+		OTHER=$$(git log $$PREV_VERSION..HEAD --pretty=format:"%s" | grep -ivE "^(feat|fix)" | sed 's/^/- /'); \
+		if [ -n "$$OTHER" ]; then \
+			echo "### Other Changes" >> RELEASE_NOTES.md; \
+			echo "$$OTHER" >> RELEASE_NOTES.md; \
+			echo "" >> RELEASE_NOTES.md; \
+		fi; \
+	fi; \
+	echo "" >> RELEASE_NOTES.md; \
+	echo "---" >> RELEASE_NOTES.md; \
+	echo "Generated: $$(date)" >> RELEASE_NOTES.md; \
+	echo "Release notes saved to RELEASE_NOTES.md"
+
+#=============================================================================
+# BRANCH MANAGEMENT
+#=============================================================================
+.PHONY: archive-old-branches delete-archived-branches
+
+archive-old-branches:
+	@echo "Archiving non-git-flow branches..."
+	@read -p "Continue? (y/n): " confirm; \
+	if [ "$$confirm" != "y" ]; then \
+		echo "Operation cancelled"; \
+		exit 0; \
+	fi; \
+	git fetch --all; \
+	for branch in $$(git branch -r | grep -v "HEAD\|develop\|main\|master\|feature/\|release/\|hotfix/" | sed 's/origin\///'); do \
+		if [ -n "$$branch" ]; then \
+			echo "Archiving $$branch..."; \
+			git tag archive/$$branch origin/$$branch 2>/dev/null || true; \
+		fi; \
+	done; \
+	git push origin --tags; \
+	echo "Done. Delete with: make delete-archived-branches"
+
+delete-archived-branches:
+	@echo "Deleting archived branches..."
+	@read -p "Continue? (y/n): " confirm; \
+	if [ "$$confirm" != "y" ]; then \
+		echo "Operation cancelled"; \
+		exit 0; \
+	fi; \
+	for tag in $$(git tag -l "archive/*"); do \
+		branch=$$(echo $$tag | sed 's/archive\///'); \
+		echo "Deleting branch $$branch..."; \
+		git push origin --delete $$branch 2>/dev/null || true; \
+	done; \
+	echo "Done."
+
+#=============================================================================
+# DEVELOPMENT TOOLS
+#=============================================================================
+.PHONY: setup verify git-hooks
+
+setup:
+	@echo "Setting up development environment..."
+	@if [ ! -f VERSION ]; then make version-init; fi
+	@if [ ! -f .git/hooks/pre-commit ]; then make git-hooks; fi
+	@echo "Setup complete"
+
+verify:
+	@echo "Running verification checks..."
+	@echo "Add your project-specific verification here"
+	@echo "Examples: lint, test, type-check, etc."
+
+git-hooks:
+	@echo "Installing Git hooks..."
+	@mkdir -p .git/hooks
+	@echo '#!/bin/sh' > .git/hooks/pre-commit
+	@echo 'echo "Running pre-commit checks..."' >> .git/hooks/pre-commit
+	@echo 'make verify' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "Git hooks installed"
+
+#=============================================================================
+# DOCKER (Template - customize for your project)
+#=============================================================================
+.PHONY: docker-build docker-push release-deploy
+
+docker-build:
+	@echo "Building Docker image $(IMAGE_NAME):$(VERSION)..."
+	docker build --build-arg VERSION=$(VERSION) -t $(REGISTRY)/$(IMAGE_NAME):$(VERSION) .
+	docker tag $(REGISTRY)/$(IMAGE_NAME):$(VERSION) $(REGISTRY)/$(IMAGE_NAME):latest
+
+docker-push:
+	@echo "Pushing Docker image..."
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(VERSION)
+	docker push $(REGISTRY)/$(IMAGE_NAME):latest
+
+release-deploy: docker-build docker-push
+	@echo "Deployed version $(VERSION)"
+
+#=============================================================================
+# CI/CD HELPERS (Template - customize for your project)
+#=============================================================================
+.PHONY: ci-setup ci-test ci-build ci-publish
+
+ci-setup:
+	@echo "Setting up CI environment..."
+	@echo "Add your CI setup commands here"
+
+ci-test:
+	@echo "Running CI tests..."
+	@make verify
+
+ci-build:
+	@echo "Building in CI..."
+	@echo "Add your build commands here"
+
+ci-publish:
+	@echo "Publishing from CI..."
+	@make docker-build docker-push

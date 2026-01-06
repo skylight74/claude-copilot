@@ -1,0 +1,543 @@
+# Multi-Repo Orchestrator Makefile Template
+# Copy this to your project root and customize the configuration section
+#
+# Usage:
+#   1. Copy to your project: cp ~/.claude/copilot/templates/Makefile.orchestrator ./Makefile
+#   2. Edit PROJECT CONFIGURATION section below
+#   3. Run: make help
+
+#=============================================================================
+# PROJECT CONFIGURATION - CUSTOMIZE THIS SECTION
+#=============================================================================
+PROJECT_NAME := my-project
+WORKSPACE_ID := my-project
+
+# List your sub-repositories (space-separated)
+# Order matters for dependencies (e.g., backend before frontend)
+REPOS := repo1 repo2 repo3
+
+# Repo shortcuts (optional, for convenience)
+# Example: BACKEND := my-backend
+#          FRONTEND := my-frontend
+#          ADMIN := my-admin
+
+#=============================================================================
+# HELP
+#=============================================================================
+.PHONY: help
+help:
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo "  $(PROJECT_NAME) - Orchestrator Makefile"
+	@echo "═══════════════════════════════════════════════════════════════════"
+	@echo ""
+	@echo "=== Sessions ==="
+	@echo "  orchestrator              Start orchestrator session"
+	@echo "  worker REPO=x TASK=y      Start worker in repo x"
+	@echo "  worker-new REPO=x TASK=y  Create feature + start worker"
+	@echo ""
+	@echo "=== Status ==="
+	@echo "  status                    All repos overview"
+	@echo "  status-REPO               Single repo status"
+	@echo "  branches                  Feature branches across all repos"
+	@echo "  version-get               Show all versions"
+	@echo ""
+	@echo "=== Testing (delegates to sub-repos) ==="
+	@echo "  test                      Run tests in all repos"
+	@echo "  test-REPO                 Run tests in specific repo"
+	@echo "  lint                      Lint all repos"
+	@echo "  verify                    Full verification (lint + test)"
+	@echo ""
+	@echo "=== Build (delegates to sub-repos) ==="
+	@echo "  build                     Build all repos"
+	@echo "  build-REPO                Build specific repo"
+	@echo "  clean                     Clean all repos"
+	@echo ""
+	@echo "=== Git Flow ==="
+	@echo "  gitflow-init              Initialize git-flow in all repos"
+	@echo "  feature-start REPO=x      Start feature in repo"
+	@echo "  feature-finish REPO=x     Finish feature in repo"
+	@echo "  release-start REPO=x      Start release (prompts for bump)"
+	@echo "  release-finish REPO=x     Finish release + push + tag"
+	@echo "  hotfix-start REPO=x       Start hotfix (auto patch bump)"
+	@echo "  hotfix-finish REPO=x      Finish hotfix + push + tag"
+	@echo ""
+	@echo "=== CI/CD ==="
+	@echo "  ci                        Full CI pipeline (lint + test + build)"
+	@echo "  deploy-staging            Deploy all to staging"
+	@echo "  deploy-prod               Deploy all to production"
+	@echo "  docker-build              Build Docker images"
+	@echo "  docker-push               Push Docker images"
+	@echo ""
+	@echo "=== Repos: $(REPOS) ==="
+
+#=============================================================================
+# ORCHESTRATOR SESSION
+#=============================================================================
+.PHONY: orchestrator
+
+orchestrator:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  ORCHESTRATOR SESSION - $(PROJECT_NAME)"
+	@echo "  Workspace: $(WORKSPACE_ID)"
+	@echo "  Coordinating: $(REPOS)"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo ""
+	@echo "Sub-repos:"
+	@for repo in $(REPOS); do \
+		echo "  - $$repo"; \
+	done
+	@echo ""
+	@echo "Tip: Use /orchestrator to start coordinating"
+	@echo ""
+	@WORKSPACE_ID="$(WORKSPACE_ID)" claude
+
+#=============================================================================
+# GENERIC WORKER SESSIONS
+#=============================================================================
+.PHONY: worker worker-new
+
+worker:
+ifndef REPO
+	$(error REPO is required. Usage: make worker REPO=repo-name TASK=feature-name)
+endif
+ifndef TASK
+	$(error TASK is required. Usage: make worker REPO=$(REPO) TASK=feature-name)
+endif
+	@if [ ! -d "$(REPO)" ]; then \
+		echo "Error: Repository '$(REPO)' not found"; \
+		echo "Available repos: $(REPOS)"; \
+		exit 1; \
+	fi
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  WORKER SESSION - $(REPO)"
+	@echo "  Task: $(TASK)"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@cd $(REPO) && \
+	if git show-ref --verify --quiet refs/heads/feature/$(TASK); then \
+		git checkout feature/$(TASK); \
+		echo "Switched to: feature/$(TASK)"; \
+	else \
+		echo "Branch feature/$(TASK) not found."; \
+		echo "Use 'make worker-new REPO=$(REPO) TASK=$(TASK)' to create it."; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Tip: Use /worker to start working"
+	@cd $(REPO) && WORKSPACE_ID="$(WORKSPACE_ID)" claude
+
+worker-new:
+ifndef REPO
+	$(error REPO is required. Usage: make worker-new REPO=repo-name TASK=feature-name)
+endif
+ifndef TASK
+	$(error TASK is required. Usage: make worker-new REPO=$(REPO) TASK=feature-name)
+endif
+	@if [ ! -d "$(REPO)" ]; then \
+		echo "Error: Repository '$(REPO)' not found"; \
+		echo "Available repos: $(REPOS)"; \
+		exit 1; \
+	fi
+	@echo "Creating feature/$(TASK) in $(REPO)..."
+	@cd $(REPO) && git flow feature start $(TASK)
+	@echo "Created branch: feature/$(TASK)"
+	@echo ""
+	@echo "Tip: Use /worker to start working"
+	@cd $(REPO) && WORKSPACE_ID="$(WORKSPACE_ID)" claude
+
+#=============================================================================
+# STATUS
+#=============================================================================
+.PHONY: status branches version-get
+
+status:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  $(PROJECT_NAME) - Status Overview"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo ""
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo "=== $$repo ==="; \
+			cd $$repo && \
+			echo "  Branch: $$(git branch --show-current 2>/dev/null || echo 'not a git repo')" && \
+			echo "  Status: $$(git status -s 2>/dev/null | wc -l) uncommitted changes" && \
+			echo "  Last:   $$(git log --oneline -1 2>/dev/null || echo 'no commits')" && \
+			echo "" && cd ..; \
+		else \
+			echo "=== $$repo === (not found)"; \
+			echo ""; \
+		fi; \
+	done
+
+# Dynamic status-REPO target
+status-%:
+	@if [ -d "$*" ]; then \
+		echo "=== $* ==="; \
+		cd $* && git branch --show-current && git status -s && git log --oneline -3; \
+	else \
+		echo "Repository '$*' not found"; \
+	fi
+
+branches:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Feature Branches Across All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== $$repo ==="; \
+			cd $$repo && git branch 2>/dev/null | grep -E "(feature|release|hotfix)/" || echo "  (no active branches)" && cd ..; \
+		fi; \
+	done
+
+version-get:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Version Information"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== $$repo ==="; \
+			if [ -f $$repo/VERSION ]; then \
+				echo "  Version: $$(cat $$repo/VERSION)"; \
+			elif [ -f $$repo/package.json ]; then \
+				echo "  Version: $$(grep '"version"' $$repo/package.json | head -1 | sed 's/.*: "\(.*\)".*/\1/')"; \
+			elif [ -f $$repo/Cargo.toml ]; then \
+				echo "  Version: $$(grep '^version' $$repo/Cargo.toml | head -1 | sed 's/.*= "\(.*\)".*/\1/')"; \
+			elif [ -f $$repo/pyproject.toml ]; then \
+				echo "  Version: $$(grep '^version' $$repo/pyproject.toml | head -1 | sed 's/.*= "\(.*\)".*/\1/')"; \
+			else \
+				echo "  (no version file)"; \
+			fi; \
+		fi; \
+	done
+
+#=============================================================================
+# TESTING - Delegates to sub-repo Makefiles
+#=============================================================================
+.PHONY: test lint verify
+
+test:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Running Tests - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Testing $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo test || exit 1; \
+			elif [ -f $$repo/package.json ]; then \
+				cd $$repo && npm test && cd ..; \
+			elif [ -f $$repo/Cargo.toml ]; then \
+				cd $$repo && cargo test && cd ..; \
+			elif [ -f $$repo/pyproject.toml ] || [ -f $$repo/setup.py ]; then \
+				cd $$repo && pytest && cd ..; \
+			else \
+				echo "  (no test configuration)"; \
+			fi; \
+		fi; \
+	done
+	@echo ""
+	@echo "All tests passed!"
+
+# Dynamic test-REPO target
+test-%:
+	@if [ -d "$*" ]; then \
+		echo "=== Testing $* ==="; \
+		if [ -f $*/Makefile ]; then \
+			$(MAKE) -C $* test; \
+		elif [ -f $*/package.json ]; then \
+			cd $* && npm test; \
+		elif [ -f $*/Cargo.toml ]; then \
+			cd $* && cargo test; \
+		elif [ -f $*/pyproject.toml ] || [ -f $*/setup.py ]; then \
+			cd $* && pytest; \
+		fi; \
+	else \
+		echo "Repository '$*' not found"; \
+	fi
+
+lint:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Linting - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Linting $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo lint 2>/dev/null || true; \
+			elif [ -f $$repo/package.json ]; then \
+				cd $$repo && npm run lint 2>/dev/null || true && cd ..; \
+			elif [ -f $$repo/Cargo.toml ]; then \
+				cd $$repo && cargo clippy 2>/dev/null || true && cd ..; \
+			elif [ -f $$repo/pyproject.toml ]; then \
+				cd $$repo && ruff check . 2>/dev/null || true && cd ..; \
+			fi; \
+		fi; \
+	done
+
+verify: lint test
+	@echo ""
+	@echo "Verification complete!"
+
+#=============================================================================
+# BUILD - Delegates to sub-repo Makefiles
+#=============================================================================
+.PHONY: build clean
+
+build:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Building - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Building $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo build || exit 1; \
+			elif [ -f $$repo/package.json ]; then \
+				cd $$repo && npm run build && cd ..; \
+			elif [ -f $$repo/Cargo.toml ]; then \
+				cd $$repo && cargo build --release && cd ..; \
+			elif [ -f $$repo/pyproject.toml ]; then \
+				cd $$repo && python -m build && cd ..; \
+			else \
+				echo "  (no build configuration)"; \
+			fi; \
+		fi; \
+	done
+	@echo ""
+	@echo "All builds complete!"
+
+# Dynamic build-REPO target
+build-%:
+	@if [ -d "$*" ]; then \
+		echo "=== Building $* ==="; \
+		if [ -f $*/Makefile ]; then \
+			$(MAKE) -C $* build; \
+		elif [ -f $*/package.json ]; then \
+			cd $* && npm run build; \
+		elif [ -f $*/Cargo.toml ]; then \
+			cd $* && cargo build --release; \
+		elif [ -f $*/pyproject.toml ]; then \
+			cd $* && python -m build; \
+		fi; \
+	else \
+		echo "Repository '$*' not found"; \
+	fi
+
+clean:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Cleaning - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo "=== Cleaning $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo clean 2>/dev/null || true; \
+			fi; \
+		fi; \
+	done
+
+#=============================================================================
+# GIT FLOW - Generic commands with REPO parameter
+#=============================================================================
+.PHONY: gitflow-init feature-start feature-finish
+.PHONY: release-start release-finish hotfix-start hotfix-finish
+
+gitflow-init:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Initializing Git Flow - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== $$repo ==="; \
+			cd $$repo && git flow init -d && cd ..; \
+		fi; \
+	done
+	@echo ""
+	@echo "Git flow initialized in all repos!"
+
+feature-start:
+ifndef REPO
+	$(error REPO is required. Usage: make feature-start REPO=repo-name)
+endif
+	@read -p "Feature name: " name; \
+	cd $(REPO) && git flow feature start $$name
+
+feature-finish:
+ifndef REPO
+	$(error REPO is required. Usage: make feature-finish REPO=repo-name)
+endif
+	@cd $(REPO) && \
+	branch=$$(git branch --show-current | sed 's/feature\///') && \
+	git flow feature finish $$branch
+
+release-start:
+ifndef REPO
+	$(error REPO is required. Usage: make release-start REPO=repo-name)
+endif
+	@cd $(REPO) && \
+	if [ -f VERSION ]; then \
+		current=$$(cat VERSION); \
+	elif [ -f package.json ]; then \
+		current=$$(grep '"version"' package.json | head -1 | sed 's/.*: "\(.*\)".*/\1/'); \
+	else \
+		current="0.0.0"; \
+	fi; \
+	echo "Current version: $$current"; \
+	read -p "Bump type (major/minor/patch): " bump; \
+	IFS='.' read -r major minor patch <<< "$$current"; \
+	case $$bump in \
+		major) major=$$((major + 1)); minor=0; patch=0 ;; \
+		minor) minor=$$((minor + 1)); patch=0 ;; \
+		patch) patch=$$((patch + 1)) ;; \
+	esac; \
+	new="$$major.$$minor.$$patch"; \
+	if [ -f VERSION ]; then \
+		echo "$$new" > VERSION; \
+		git add VERSION; \
+	elif [ -f package.json ]; then \
+		npm version $$new --no-git-tag-version; \
+		git add package.json package-lock.json 2>/dev/null || git add package.json; \
+	fi; \
+	git commit -m "chore: bump version to $$new"; \
+	git flow release start $$new
+
+release-finish:
+ifndef REPO
+	$(error REPO is required. Usage: make release-finish REPO=repo-name)
+endif
+	@cd $(REPO) && \
+	branch=$$(git branch --show-current | sed 's/release\///') && \
+	git flow release finish -m "Release $$branch" $$branch && \
+	git push origin main develop --tags
+
+hotfix-start:
+ifndef REPO
+	$(error REPO is required. Usage: make hotfix-start REPO=repo-name)
+endif
+	@cd $(REPO) && \
+	if [ -f VERSION ]; then \
+		current=$$(cat VERSION); \
+	elif [ -f package.json ]; then \
+		current=$$(grep '"version"' package.json | head -1 | sed 's/.*: "\(.*\)".*/\1/'); \
+	else \
+		current="0.0.0"; \
+	fi; \
+	IFS='.' read -r major minor patch <<< "$$current"; \
+	patch=$$((patch + 1)); \
+	new="$$major.$$minor.$$patch"; \
+	if [ -f VERSION ]; then \
+		echo "$$new" > VERSION; \
+		git add VERSION; \
+	elif [ -f package.json ]; then \
+		npm version $$new --no-git-tag-version; \
+		git add package.json package-lock.json 2>/dev/null || git add package.json; \
+	fi; \
+	git commit -m "chore: bump version to $$new"; \
+	git flow hotfix start $$new
+
+hotfix-finish:
+ifndef REPO
+	$(error REPO is required. Usage: make hotfix-finish REPO=repo-name)
+endif
+	@cd $(REPO) && \
+	branch=$$(git branch --show-current | sed 's/hotfix\///') && \
+	git flow hotfix finish -m "Hotfix $$branch" $$branch && \
+	git push origin main develop --tags
+
+#=============================================================================
+# CI/CD - Orchestrated pipelines
+#=============================================================================
+.PHONY: ci deploy-staging deploy-prod docker-build docker-push
+
+ci: verify build
+	@echo ""
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  CI Pipeline Complete"
+	@echo "═══════════════════════════════════════════════════════════════"
+
+deploy-staging:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Deploying to Staging - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Deploying $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo deploy-staging 2>/dev/null || echo "  (no staging deploy configured)"; \
+			fi; \
+		fi; \
+	done
+
+deploy-prod:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Deploying to Production - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo ""
+	@read -p "Are you sure you want to deploy to PRODUCTION? (yes/no): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		for repo in $(REPOS); do \
+			if [ -d "$$repo" ]; then \
+				echo ""; \
+				echo "=== Deploying $$repo ==="; \
+				if [ -f $$repo/Makefile ]; then \
+					$(MAKE) -C $$repo deploy-prod 2>/dev/null || echo "  (no prod deploy configured)"; \
+				fi; \
+			fi; \
+		done; \
+	else \
+		echo "Deployment cancelled."; \
+	fi
+
+docker-build:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Building Docker Images - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Building $$repo ==="; \
+			if [ -f $$repo/Dockerfile ]; then \
+				if [ -f $$repo/Makefile ]; then \
+					$(MAKE) -C $$repo docker-build 2>/dev/null || \
+					docker build -t $$repo:latest $$repo; \
+				else \
+					docker build -t $$repo:latest $$repo; \
+				fi; \
+			else \
+				echo "  (no Dockerfile)"; \
+			fi; \
+		fi; \
+	done
+
+docker-push:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Pushing Docker Images - All Repos"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== Pushing $$repo ==="; \
+			if [ -f $$repo/Makefile ]; then \
+				$(MAKE) -C $$repo docker-push 2>/dev/null || echo "  (no docker-push configured)"; \
+			fi; \
+		fi; \
+	done
+
+#=============================================================================
+# NOTION INTEGRATION (handled by orchestrator session)
+#=============================================================================
+.PHONY: sync-sprint sync-invoices
+
+sync-sprint:
+	@echo "Sprint sync is handled by the Orchestrator session."
+	@echo "Run 'make orchestrator' and ask to sync the sprint board."
+
+sync-invoices:
+	@echo "Invoice sync is handled by the Orchestrator session."
+	@echo "Run 'make orchestrator' and ask to update invoices."
