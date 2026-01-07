@@ -237,6 +237,122 @@ async function testPrdInvalidInput(): Promise<void> {
 }
 
 // ============================================================================
+// TEST SUITE 1.5: PRD SCOPE LOCK
+// ============================================================================
+
+async function testPrdScopeLock(): Promise<void> {
+  const db = createTestDatabase();
+
+  try {
+    const initiativeId = setupInitiative(db);
+
+    // Create PRD with scope locked
+    const prd = await prdCreate(db, {
+      title: 'Locked PRD',
+      content: 'Scope is locked for this PRD',
+      metadata: {
+        scopeLocked: true,
+        priority: 'P0'
+      }
+    });
+
+    console.log(`  ✓ Created PRD with scopeLocked: ${prd.id}`);
+
+    // Test 1: @agent-ta can create tasks (should succeed)
+    const taTask = await taskCreate(db, {
+      title: 'Task from TA',
+      description: 'This should work',
+      prdId: prd.id,
+      assignedAgent: 'ta'
+    });
+    assert(taTask.id !== undefined, 'TA should be able to create task');
+    console.log(`  ✓ @agent-ta can create tasks on locked PRD`);
+
+    // Test 2: @agent-me cannot create tasks (should fail)
+    let errorThrown = false;
+    try {
+      await taskCreate(db, {
+        title: 'Task from ME',
+        description: 'This should fail',
+        prdId: prd.id,
+        assignedAgent: 'me'
+      });
+    } catch (error) {
+      errorThrown = true;
+      const errorMessage = error instanceof Error ? error.message : '';
+      assert(
+        errorMessage.includes('Scope is locked'),
+        'Error should mention scope lock'
+      );
+      assert(
+        errorMessage.includes('Only @agent-ta can create tasks'),
+        'Error should mention TA agent'
+      );
+      assert(
+        errorMessage.includes('scope_change_request'),
+        'Error should mention scope change request'
+      );
+      console.log(`  ✓ @agent-me blocked from creating tasks on locked PRD`);
+    }
+    assert(errorThrown, 'Should throw error for non-TA agent');
+
+    // Test 3: Other agents also blocked
+    errorThrown = false;
+    try {
+      await taskCreate(db, {
+        title: 'Task from QA',
+        description: 'This should also fail',
+        prdId: prd.id,
+        assignedAgent: 'qa'
+      });
+    } catch (error) {
+      errorThrown = true;
+      console.log(`  ✓ @agent-qa blocked from creating tasks on locked PRD`);
+    }
+    assert(errorThrown, 'Should throw error for QA agent');
+
+    // Test 4: Unlocked PRD allows any agent
+    const unlockedPrd = await prdCreate(db, {
+      title: 'Unlocked PRD',
+      content: 'Scope is not locked',
+      metadata: {
+        scopeLocked: false,
+        priority: 'P1'
+      }
+    });
+
+    const meTask = await taskCreate(db, {
+      title: 'Task from ME on unlocked PRD',
+      prdId: unlockedPrd.id,
+      assignedAgent: 'me'
+    });
+    assert(meTask.id !== undefined, 'ME should work on unlocked PRD');
+    console.log(`  ✓ Any agent can create tasks on unlocked PRD`);
+
+    // Test 5: PRD without scopeLocked (default: undefined) allows any agent
+    const defaultPrd = await prdCreate(db, {
+      title: 'Default PRD',
+      content: 'No scopeLocked metadata',
+      metadata: {
+        priority: 'P2'
+      }
+    });
+
+    const qaTask = await taskCreate(db, {
+      title: 'Task from QA on default PRD',
+      prdId: defaultPrd.id,
+      assignedAgent: 'qa'
+    });
+    assert(qaTask.id !== undefined, 'QA should work on default PRD');
+    console.log(`  ✓ Default PRDs (no scopeLocked) allow any agent`);
+
+    console.log(`  ✓ Scope lock enforcement working correctly`);
+  } finally {
+    db.close();
+  }
+}
+
+// ============================================================================
 // TEST SUITE 2: TASK LIFECYCLE
 // ============================================================================
 
@@ -1696,6 +1812,7 @@ async function runAllTests(): Promise<void> {
     await runTest('PRD Create', testPrdCreate);
     await runTest('PRD Get and List', testPrdGetAndList);
     await runTest('PRD Invalid Input', testPrdInvalidInput);
+    await runTest('PRD Scope Lock', testPrdScopeLock);
 
     // Task Lifecycle
     await runTest('Task Create', testTaskCreate);

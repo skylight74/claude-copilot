@@ -55,7 +55,13 @@ export function initiativeLink(
         initiative_id: currentInitiative.id,
         type: 'streams_auto_archived',
         entity_id: currentInitiative.id,
+        entity_type: 'initiative',
         summary: `Auto-archived ${archivedStreamsCount} stream tasks due to initiative switch to ${input.initiativeId}`,
+        metadata: JSON.stringify({
+          archivedStreamsCount,
+          previousInitiativeId: currentInitiative.id,
+          newInitiativeId: input.initiativeId
+        }),
         created_at: now
       });
     }
@@ -76,9 +82,15 @@ export function initiativeLink(
     initiative_id: input.initiativeId,
     type: workspaceCreated ? 'initiative_created' : 'initiative_updated',
     entity_id: input.initiativeId,
+    entity_type: 'initiative',
     summary: workspaceCreated
       ? `Linked initiative: ${input.title}`
       : `Updated initiative: ${input.title}`,
+    metadata: JSON.stringify({
+      initiativeId: input.initiativeId,
+      title: input.title,
+      isNew: workspaceCreated
+    }),
     created_at: now
   });
 
@@ -196,7 +208,17 @@ export function initiativeArchive(
     initiative_id: initiative.id,
     type: 'initiative_archived',
     entity_id: initiative.id,
+    entity_type: 'initiative',
     summary: `Archived initiative to: ${archivePath}`,
+    metadata: JSON.stringify({
+      initiativeId: initiative.id,
+      archivePath,
+      archivedItemCounts: {
+        prds: prds.length,
+        tasks: allTasks.length,
+        workProducts: archiveData.workProducts.length
+      }
+    }),
     created_at: new Date().toISOString()
   });
 
@@ -240,7 +262,17 @@ export function initiativeWipe(
     initiative_id: initiative.id,
     type: 'initiative_wiped',
     entity_id: initiative.id,
+    entity_type: 'initiative',
     summary: `Wiped all data for initiative: ${initiative.title}`,
+    metadata: JSON.stringify({
+      initiativeId: initiative.id,
+      deletedCounts: {
+        prds: deletedCounts.prds,
+        tasks: deletedCounts.tasks,
+        workProducts: deletedCounts.workProducts,
+        activityLogs: deletedCounts.activityLogs
+      }
+    }),
     created_at: new Date().toISOString()
   });
 

@@ -70,7 +70,17 @@ export function agentHandoff(
         initiative_id: prd.initiative_id,
         type: 'agent_handoff',
         entity_id: id,
+        entity_type: 'agent_handoff',
         summary: `${input.fromAgent} → ${input.toAgent} (${input.chainPosition}/${input.chainLength})`,
+        metadata: JSON.stringify({
+          handoffId: id,
+          taskId: input.taskId,
+          fromAgent: input.fromAgent,
+          toAgent: input.toAgent,
+          chainPosition: input.chainPosition,
+          chainLength: input.chainLength,
+          context: input.handoffContext
+        }),
         created_at: now
       });
     }

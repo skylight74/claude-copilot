@@ -135,30 +135,93 @@ Then run:
 ### 4. Start Working
 
 ```bash
-/protocol                            # Start fresh work (interactive)
-/protocol fix the login bug          # Quick start with auto-routing
+/protocol fix the login bug          # Start fresh work
 /continue                            # Resume where you left off
-/continue Stream-B                   # Resume specific parallel stream
 ```
 
-**Control work intensity with keywords:**
+→ [Complete setup guide](docs/USER-JOURNEY.md)
+
+---
+
+## How to Use This Framework
+
+### The Basic Pattern
 
 ```bash
-/protocol quick fix the typo             # Fast, minimal overhead
-/protocol thorough review auth module    # Deep analysis, full validation
-/protocol analyze the slow database      # Investigation focus
-/protocol ultrawork payment system       # Maximum depth, no shortcuts
+# New work
+/protocol [describe what you want to do]
+
+# Resume
+/continue
 ```
 
-### 5. (Optional) Shared Knowledge
+That's it. The framework classifies your request, routes to the right specialist, tracks progress, and remembers everything.
+
+### Real Workflows
+
+**Bug fix:**
+```bash
+/protocol the checkout crashes on empty cart
+```
+→ Routes to QA → reproduces → routes to Engineer → fixes → verifies → auto-commits
+
+**New feature:**
+```bash
+/protocol add dark mode to settings
+```
+→ Routes through Service Design → UX → UI Design → Implementation → verified and committed
+
+**Resume yesterday:**
+```bash
+/continue
+```
+→ Loads memory → shows progress → picks up exactly where you left off
+
+### Work Intensity
+
+Control depth with keywords:
+
+| Keyword | Use For |
+|---------|---------|
+| `quick` | Typos, obvious fixes |
+| `analyze` | Investigation only |
+| `thorough` | Deep review, full testing |
+| `ultrawork` | Multi-day features, architecture |
+
+```bash
+/protocol quick fix the typo
+/protocol ultrawork redesign the auth system
+```
+
+### What Happens Automatically
+
+| Feature | What It Does |
+|---------|--------------|
+| **Preflight Check** | Agents verify environment before starting |
+| **Verification** | Complex tasks require proof of completion |
+| **Auto-Commit** | Completed tasks create git commits |
+| **Scope Lock** | Feature PRDs prevent scope creep |
+| **Memory** | Progress survives across sessions |
+
+### Context Switching
+
+```bash
+/pause switching to urgent bug    # Save current work
+/protocol fix the crash           # Handle urgent work
+/continue Stream-A                # Resume previous work
+```
+
+→ [Full usage guide with scenarios](docs/USAGE-GUIDE.md)
+
+---
+
+## (Optional) Shared Knowledge
 
 ```
 /knowledge-copilot
 ```
 
-Creates a Git-managed knowledge repository for company information, shareable via GitHub.
-
-→ [Complete setup guide](docs/USER-JOURNEY.md)
+Creates a Git-managed knowledge repository for company information, shareable via GitHub
 
 ---
 
@@ -222,17 +285,27 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 ## Documentation
 
+**Start here:**
 | Guide | Purpose |
 |-------|---------|
+| [Usage Guide](docs/USAGE-GUIDE.md) | **How to actually use this** - real workflows and scenarios |
 | [Decision Guide](docs/DECISION-GUIDE.md) | When to use what - quick reference matrices |
-| [User Journey](docs/USER-JOURNEY.md) | Complete setup walkthrough |
 | [Agents](docs/AGENTS.md) | All 12 specialists in detail |
+
+**Setup & Configuration:**
+| Guide | Purpose |
+|-------|---------|
+| [User Journey](docs/USER-JOURNEY.md) | Complete setup walkthrough |
 | [Configuration](docs/CONFIGURATION.md) | .mcp.json, environment variables |
 | [Customization](docs/CUSTOMIZATION.md) | Extensions, knowledge repos, private skills |
-| [Enhancement Features](docs/ENHANCEMENT-FEATURES.md) | Context engineering: auto-compaction, activation modes |
-| [Philosophy](docs/PHILOSOPHY.md) | Why we built it this way |
-| [Architecture](docs/ARCHITECTURE.md) | Technical deep dive |
+
+**Advanced:**
+| Guide | Purpose |
+|-------|---------|
+| [Enhancement Features](docs/ENHANCEMENT-FEATURES.md) | Verification, auto-commit, preflight, worktrees |
 | [Extension Spec](docs/EXTENSION-SPEC.md) | Creating extensions |
+| [Architecture](docs/ARCHITECTURE.md) | Technical deep dive |
+| [Philosophy](docs/PHILOSOPHY.md) | Why we built it this way |
 
 **Operations:**
 | Document | Purpose |

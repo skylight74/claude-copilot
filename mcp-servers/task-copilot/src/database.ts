@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS activity_log (
   initiative_id TEXT NOT NULL,
   type TEXT NOT NULL,
   entity_id TEXT NOT NULL,
+  entity_type TEXT,
   summary TEXT NOT NULL,
+  metadata TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (initiative_id) REFERENCES initiatives(id)
 );
@@ -188,6 +190,29 @@ ALTER TABLE tasks ADD COLUMN archived_by_initiative_id TEXT DEFAULT NULL;
 CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived);
 `;
 
+// Migration SQL for version 7: Scope Change Requests (P3.3)
+const MIGRATION_V7_SQL = `
+-- scope_change_requests table
+CREATE TABLE IF NOT EXISTS scope_change_requests (
+  id TEXT PRIMARY KEY,
+  prd_id TEXT NOT NULL,
+  request_type TEXT NOT NULL CHECK(request_type IN ('add_task', 'modify_task', 'remove_task')),
+  description TEXT NOT NULL,
+  rationale TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'rejected')),
+  created_at TEXT NOT NULL,
+  reviewed_at TEXT,
+  reviewed_by TEXT,
+  review_notes TEXT,
+  FOREIGN KEY (prd_id) REFERENCES prds(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_scope_requests_prd ON scope_change_requests(prd_id);
+CREATE INDEX IF NOT EXISTS idx_scope_requests_status ON scope_change_requests(status);
+CREATE INDEX IF NOT EXISTS idx_scope_requests_created ON scope_change_requests(created_at DESC);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -195,7 +220,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -286,6 +311,15 @@ export class DatabaseClient {
       this.db.exec(MIGRATION_V6_SQL);
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
         6,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v7: Scope Change Requests (P3.3)
+    if (currentVersion < 7) {
+      this.db.exec(MIGRATION_V7_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        7,
         new Date().toISOString()
       );
     }
@@ -531,14 +565,16 @@ export class DatabaseClient {
   // Activity Log operations
   insertActivity(activity: ActivityLogRow): void {
     this.db.prepare(`
-      INSERT INTO activity_log (id, initiative_id, type, entity_id, summary, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO activity_log (id, initiative_id, type, entity_id, entity_type, summary, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       activity.id,
       activity.initiative_id,
       activity.type,
       activity.entity_id,
+      activity.entity_type || null,
       activity.summary,
+      activity.metadata || null,
       activity.created_at
     );
   }
@@ -1033,6 +1069,131 @@ export class DatabaseClient {
     `).run(streamId);
 
     return result.changes;
+  }
+
+  // ============================================================================
+  // SCOPE CHANGE REQUESTS (P3.3)
+  // ============================================================================
+
+  insertScopeChangeRequest(request: {
+    id: string;
+    prd_id: string;
+    request_type: string;
+    description: string;
+    rationale: string;
+    requested_by: string;
+    status: string;
+    created_at: string;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO scope_change_requests (id, prd_id, request_type, description, rationale, requested_by, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      request.id,
+      request.prd_id,
+      request.request_type,
+      request.description,
+      request.rationale,
+      request.requested_by,
+      request.status,
+      request.created_at
+    );
+  }
+
+  getScopeChangeRequest(id: string): {
+    id: string;
+    prd_id: string;
+    request_type: string;
+    description: string;
+    rationale: string;
+    requested_by: string;
+    status: string;
+    created_at: string;
+    reviewed_at: string | null;
+    reviewed_by: string | null;
+    review_notes: string | null;
+  } | undefined {
+    return this.db.prepare('SELECT * FROM scope_change_requests WHERE id = ?').get(id) as {
+      id: string;
+      prd_id: string;
+      request_type: string;
+      description: string;
+      rationale: string;
+      requested_by: string;
+      status: string;
+      created_at: string;
+      reviewed_at: string | null;
+      reviewed_by: string | null;
+      review_notes: string | null;
+    } | undefined;
+  }
+
+  listScopeChangeRequests(options: {
+    prdId?: string;
+    status?: string;
+  }): Array<{
+    id: string;
+    prd_id: string;
+    request_type: string;
+    description: string;
+    rationale: string;
+    requested_by: string;
+    status: string;
+    created_at: string;
+    reviewed_at: string | null;
+    reviewed_by: string | null;
+    review_notes: string | null;
+  }> {
+    let sql = 'SELECT * FROM scope_change_requests WHERE 1=1';
+    const params: unknown[] = [];
+
+    if (options.prdId) {
+      sql += ' AND prd_id = ?';
+      params.push(options.prdId);
+    }
+
+    if (options.status) {
+      sql += ' AND status = ?';
+      params.push(options.status);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    return this.db.prepare(sql).all(...params) as Array<{
+      id: string;
+      prd_id: string;
+      request_type: string;
+      description: string;
+      rationale: string;
+      requested_by: string;
+      status: string;
+      created_at: string;
+      reviewed_at: string | null;
+      reviewed_by: string | null;
+      review_notes: string | null;
+    }>;
+  }
+
+  updateScopeChangeRequest(id: string, updates: {
+    status: string;
+    reviewed_at: string;
+    reviewed_by?: string;
+    review_notes?: string;
+  }): void {
+    this.db.prepare(`
+      UPDATE scope_change_requests
+      SET status = ?,
+          reviewed_at = ?,
+          reviewed_by = ?,
+          review_notes = ?
+      WHERE id = ?
+    `).run(
+      updates.status,
+      updates.reviewed_at,
+      updates.reviewed_by || null,
+      updates.review_notes || null,
+      id
+    );
   }
 
   close(): void {

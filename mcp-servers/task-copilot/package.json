@@ -1,6 +1,6 @@
 {
   "name": "@copilot/task-mcp-server",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "MCP server for PRD and task management",
   "type": "module",
   "main": "dist/index.js",
@@ -15,6 +15,8 @@
     "test:progress": "npm run build && node dist/tools/progress-visibility.integration.test.js",
     "test:pause-resume": "npm run build && node dist/tools/__tests__/checkpoint-pause-resume.test.js",
     "test:activation-mode": "npm run build && node dist/verify-activation-mode.js",
+    "test:verification": "npm run build && node dist/tools/__tests__/verification-complex-tasks.test.js",
+    "test:prd-auto": "npm run build && node dist/tools/__tests__/prd-auto-detection.test.js",
     "test:benchmark": "npm run build && node dist/benchmark/test.js",
     "benchmark:example": "npm run build && node dist/benchmark/example.js",
     "benchmark:baseline": "npm run build && node dist/benchmark/baseline-scenarios.js",

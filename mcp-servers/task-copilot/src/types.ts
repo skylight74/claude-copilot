@@ -30,6 +30,8 @@ export interface PrdMetadata extends Record<string, unknown> {
   complexity?: string;
   tags?: string[];
   milestones?: Milestone[]; // Optional progress milestones
+  scopeLocked?: boolean; // When true, only @agent-ta can create tasks for this PRD
+  prdType?: 'FEATURE' | 'EXPERIENCE' | 'DEFECT' | 'QUESTION' | 'TECHNICAL'; // Auto-detected from title/description
 }
 
 // PRD
@@ -87,6 +89,23 @@ export interface TaskMetadata extends Record<string, unknown> {
 
   // Verification enforcement (GSD-inspired DX improvements)
   verificationRequired?: boolean; // If true, requires acceptanceCriteria and proof to complete
+
+  // Auto-commit on completion (git checkpoint system)
+  autoCommit?: boolean;        // If true (default), auto-commit on task completion
+  filesModified?: string[];    // File paths modified by this task (for staging)
+
+  // Task isolation with git worktrees
+  isolatedWorktree?: boolean;  // If true, task runs in isolated git worktree (opt-in)
+  mergeConflicts?: string[];   // List of files with merge conflicts (set when merge fails)
+  mergeConflictTimestamp?: string; // When merge conflict was detected
+
+  // Preflight configuration (Session Boundary Protocol)
+  preflight?: boolean;         // Whether to require preflight check (default: true for complex tasks)
+  preflightConfig?: {
+    checkDevServer?: boolean;  // Check if dev server is running
+    devServerPort?: number;    // Port to check (default: 3000)
+    testCommand?: string;      // Baseline test command to run
+  };
 }
 
 // Work Product
@@ -164,7 +183,9 @@ export interface ActivityLogRow {
   initiative_id: string;
   type: string;
   entity_id: string;
+  entity_type?: string | null;
   summary: string;
+  metadata?: string | null;
   created_at: string;
 }
 
@@ -843,4 +864,106 @@ export interface StreamArchiveAllOutput {
   streamsArchived: number;
   tasksArchived: number;
   archivedAt: string;
+}
+
+// ============================================================================
+// PREFLIGHT CHECK TYPES (Session Boundary Protocol)
+// ============================================================================
+
+export type PreflightCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
+
+export interface PreflightCheckInput {
+  taskId?: string;
+  initiativeId?: string;
+  checkDevServer?: boolean;
+  devServerPort?: number;
+  testCommand?: string;
+}
+
+export interface PreflightResult {
+  healthy: boolean;
+  timestamp: string;
+  checks: {
+    progress: {
+      status: PreflightCheckStatus;
+      initiative?: string;
+      tasksInProgress: number;
+      blockedTasks: number;
+      message?: string;
+    };
+    git: {
+      status: PreflightCheckStatus;
+      branch: string;
+      clean: boolean;
+      uncommittedFiles: number;
+      message?: string;
+    };
+    devServer?: {
+      status: PreflightCheckStatus;
+      port?: number;
+      message?: string;
+    };
+    tests?: {
+      status: PreflightCheckStatus;
+      passed?: number;
+      failed?: number;
+      message?: string;
+    };
+  };
+  recommendations: string[];
+}
+
+// ============================================================================
+// SCOPE CHANGE REQUEST TYPES (P3.3)
+// ============================================================================
+
+export type ScopeChangeRequestType = 'add_task' | 'modify_task' | 'remove_task';
+export type ScopeChangeRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ScopeChangeRequest {
+  id: string;
+  prdId: string;
+  requestType: ScopeChangeRequestType;
+  description: string;
+  rationale: string;
+  requestedBy: string;
+  status: ScopeChangeRequestStatus;
+  createdAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+}
+
+export interface ScopeChangeRequestRow {
+  id: string;
+  prd_id: string;
+  request_type: string;
+  description: string;
+  rationale: string;
+  requested_by: string;
+  status: string;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_notes: string | null;
+}
+
+export interface ScopeChangeRequestInput {
+  prdId: string;
+  requestType: ScopeChangeRequestType;
+  description: string;
+  rationale: string;
+  requestedBy: string;
+}
+
+export interface ScopeChangeReviewInput {
+  id: string;
+  status: 'approved' | 'rejected';
+  reviewNotes?: string;
+  reviewedBy?: string;
+}
+
+export interface ScopeChangeListInput {
+  prdId?: string;
+  status?: ScopeChangeRequestStatus;
 }

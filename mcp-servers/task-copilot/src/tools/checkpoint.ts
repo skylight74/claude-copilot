@@ -103,6 +103,35 @@ export function checkpointCreate(
     validation_state: null
   });
 
+  // Log activity (need initiative ID from task -> PRD)
+  if (task.prd_id) {
+    const prd = db.getPrd(task.prd_id);
+    if (prd) {
+      db.insertActivity({
+        id: `${uuidv4()}`,
+        initiative_id: prd.initiative_id,
+        type: 'checkpoint_created',
+        entity_id: id,
+        entity_type: 'checkpoint',
+        summary: `Created checkpoint #${sequence} for task: ${task.title}`,
+        metadata: JSON.stringify({
+          checkpointId: id,
+          taskId: input.taskId,
+          sequence,
+          trigger,
+          executionPhase: input.executionPhase,
+          executionStep: input.executionStep,
+          hasDraft: !!draftContent,
+          draftType: input.draftType,
+          subtaskCount: subtaskStates.length,
+          assignedAgent: task.assigned_agent,
+          isPause: trigger === 'manual' && !!input.pauseMetadata
+        }),
+        created_at: now
+      });
+    }
+  }
+
   // Prune old checkpoints if exceeding max
   const count = db.getCheckpointCount(input.taskId);
   if (count > MAX_CHECKPOINTS_PER_TASK) {

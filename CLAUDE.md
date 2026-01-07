@@ -621,3 +621,97 @@ Standards and guides in `docs/operations/`:
 |----------|---------|
 | `working-protocol.md` | Agent-First Protocol details |
 | `documentation-guide.md` | Doc standards, token budgets |
+
+---
+
+## Session Boundary Protocol
+
+The Session Boundary Protocol ensures agents start work in a healthy environment by running preflight checks before substantive work.
+
+### Overview
+
+Agents should call `preflight_check()` before beginning implementation, planning, or testing to surface environment issues early and prevent wasted work.
+
+### When to Use
+
+| Agent | When to Check | Why |
+|-------|---------------|-----|
+| `@agent-me` | Before implementation | Verify environment, git state, dependencies satisfied |
+| `@agent-ta` | Before planning/PRD creation | Understand current context, check for blockers |
+| `@agent-qa` | Before running tests | Ensure test environment configured, no false failures |
+
+### Preflight Check Tool
+
+**Tool:** `preflight_check({ taskId: "TASK-xxx" })`
+
+**Returns health report with:**
+
+| Field | Description |
+|-------|-------------|
+| `healthy` | Overall health status (boolean) |
+| `git.clean` | Whether working directory is clean |
+| `progress.blockedTasks` | Number of blocked tasks |
+| `environment` | Environment issues detected |
+| `recommendations` | Suggested actions if unhealthy |
+
+### Decision Matrix
+
+| Condition | Action |
+|-----------|--------|
+| `healthy: true` | Proceed with work |
+| `git.clean: false` (unrelated changes) | Warn user, suggest commit/stash |
+| `git.clean: false` (related changes) | Proceed, note in context |
+| `blockedTasks > 3` | Suggest unblocking before new work |
+| `environment` issues | Fix critical issues before proceeding |
+
+### Agent-Specific Guidance
+
+**@agent-me:**
+- Must verify environment before implementation
+- Git dirty with unrelated changes: warn but can continue if acknowledged
+- Environment issues: STOP and fix (missing deps, config errors)
+- Blocked dependencies: wait for prerequisites
+
+**@agent-ta:**
+- Check before creating PRDs/tasks
+- Git dirty: note current work, ensure new plan doesn't conflict
+- Many blocked tasks: identify patterns, address in plan
+- Use `stream_conflict_check()` for parallel work planning
+
+**@agent-qa:**
+- Check before running tests
+- Environment issues: fix before test execution to prevent false failures
+- Git dirty with failing tests: determine if failures from current changes
+- Missing test dependencies: install before proceeding
+
+### Benefits
+
+- **Early issue detection**: Surface problems before wasted work
+- **Context awareness**: Understand current state before planning
+- **Better decisions**: Know git state, blockers, environment status
+- **Prevent false failures**: Ensure healthy environment for tests
+- **Stream coordination**: Avoid file conflicts in parallel work
+
+### Example Usage
+
+```typescript
+// @agent-me starting implementation
+const health = await preflight_check({ taskId: "TASK-123" });
+
+if (!health.healthy) {
+  // Review recommendations
+  if (health.git.clean === false) {
+    console.log("Warning: Uncommitted changes detected");
+    console.log("Recommendation:", health.recommendations);
+    // Proceed if changes are related to current task
+  }
+
+  if (health.environment.length > 0) {
+    console.log("Environment issues:", health.environment);
+    // STOP and fix critical issues
+    return;
+  }
+}
+
+// Proceed with implementation
+```

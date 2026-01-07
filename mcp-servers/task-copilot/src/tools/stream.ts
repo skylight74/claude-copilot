@@ -426,7 +426,13 @@ export function streamUnarchive(
     initiative_id: targetInitiativeId,
     type: 'stream_unarchived',
     entity_id: streamId,
+    entity_type: 'stream',
     summary: `Unarchived stream ${streamId} (${tasksUnarchived} tasks) and linked to initiative ${targetInitiativeId}`,
+    metadata: JSON.stringify({
+      streamId,
+      tasksUnarchived,
+      targetInitiativeId
+    }),
     created_at: now
   });
 
@@ -516,7 +522,13 @@ export function streamArchiveAll(
       initiative_id: targetInitiativeId,
       type: 'stream_archive_all',
       entity_id: 'bulk',
+      entity_type: 'stream',
       summary: `Archived all streams (${streamsArchived} streams, ${tasksArchived} tasks)`,
+      metadata: JSON.stringify({
+        streamsArchived,
+        tasksArchived,
+        targetInitiativeId
+      }),
       created_at: now
     });
   }

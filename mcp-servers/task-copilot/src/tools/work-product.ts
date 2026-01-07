@@ -87,7 +87,18 @@ export async function workProductStore(
         initiative_id: prd.initiative_id,
         type: 'work_product_created',
         entity_id: id,
+        entity_type: 'work_product',
         summary: `Created ${input.type}: ${input.title}${flagSuffix}`,
+        metadata: JSON.stringify({
+          workProductId: id,
+          taskId: input.taskId,
+          type: input.type,
+          title: input.title,
+          wordCount: input.content.split(/\s+/).filter(w => w.length > 0).length,
+          assignedAgent: task.assigned_agent,
+          hasValidationWarnings: validationResult.flags.length > 0,
+          validationFlagCount: validationResult.flags.length
+        }),
         created_at: now
       });
     }

@@ -2,16 +2,22 @@
 
 ## Overview
 
-Claude Copilot includes 6 enhancement features developed from community research, designed to improve agent reliability, workflow efficiency, and development velocity:
+Claude Copilot includes 12 enhancement features developed from community research and Anthropic's long-running agent harness patterns, designed to improve agent reliability, workflow efficiency, and development velocity:
 
-| Feature | Benefit | Impact |
-|---------|---------|--------|
-| **Self-improving Memory Schema** | Agents learn from mistakes | Continuous framework improvement |
-| **Quality Gates Configuration** | Enforce code standards | Zero defect completions |
-| **Activation Mode Detection** | Context-aware execution | Right approach for each task |
-| **Git Worktree Isolation** | True parallel development | No merge conflicts |
-| **Continuation Enforcement** | Prevent premature stops | Robust task completion |
-| **Auto-compaction Threshold** | Manage context size | Efficient token usage |
+| # | Feature | Benefit | Impact |
+|---|---------|---------|--------|
+| 1 | **Self-improving Memory Schema** | Agents learn from mistakes | Continuous framework improvement |
+| 2 | **Quality Gates Configuration** | Enforce code standards | Zero defect completions |
+| 3 | **Activation Mode Detection** | Context-aware execution | Right approach for each task |
+| 4 | **Git Worktree Isolation** | True parallel development | No merge conflicts |
+| 5 | **Continuation Enforcement** | Prevent premature stops | Robust task completion |
+| 6 | **Auto-compaction Threshold** | Manage context size | Efficient token usage |
+| 7 | **Verification Enforcement** | Require proof of completion | No early victory declarations |
+| 8 | **Auto-Commit on Completion** | Git commits as checkpoints | Recoverable work states |
+| 9 | **Preflight Check** | Verify environment health | Catch issues before starting |
+| 10 | **Scope Lock** | Separate planning from execution | Prevent scope creep |
+| 11 | **Task Worktree Isolation** | Isolate risky changes | Safe refactoring |
+| 12 | **WebSocket Bridge** | Stream events to UIs | Real-time visibility |
 
 These features work together to create a robust, self-improving development system that maintains quality while maximizing efficiency.
 
@@ -1602,16 +1608,259 @@ const full = await work_product_get({ id: workProduct.id });
 
 ---
 
+---
+
+## v1.8 Harness Features
+
+Based on Anthropic's research on long-running agents, v1.8 adds features that improve agent reliability over multi-session work.
+
+### 7. Verification Enforcement (Default On)
+
+**Purpose:** Prevents "early victory declaration" - agents claiming tasks complete without proof.
+
+**How it works:**
+- Tasks with `complexity: "High"` or `"Very High"` automatically require verification
+- Agent must provide proof before marking complete (test output, work products, or detailed notes ≥50 chars)
+- Task completion blocked without evidence
+
+**Automatic behavior:**
+```typescript
+// High complexity task - verification auto-enabled
+task_create({
+  title: "Implement authentication",
+  metadata: { complexity: "High" }  // verificationRequired: true (automatic)
+})
+
+// Completion requires proof
+task_update({
+  id: "TASK-xxx",
+  status: "completed",
+  notes: "All 47 tests pass. See WP-001 for implementation."  // ✓ Sufficient proof
+})
+```
+
+**Override if needed:**
+```typescript
+metadata: { complexity: "High", verificationRequired: false }
+```
+
+---
+
+### 8. Auto-Commit on Completion
+
+**Purpose:** Git commits serve as checkpoints - every completed task creates a commit.
+
+**How it works:**
+- When task marked complete AND `filesModified` array exists in metadata
+- Auto-stages listed files
+- Creates commit: `feat(TASK-xxx): <task title>`
+- Includes task ID in commit body
+
+**Automatic behavior:**
+```typescript
+task_update({
+  id: "TASK-xxx",
+  status: "completed",
+  metadata: {
+    filesModified: ["src/auth.ts", "src/types.ts"]
+  }
+})
+// Creates: git commit -m "feat(TASK-xxx): Implement authentication"
+```
+
+**Disable for a task:**
+```typescript
+metadata: { autoCommit: false }
+```
+
+**Error handling:**
+- Dirty directory: warns but doesn't fail
+- No git: warns but doesn't fail
+- No filesModified: skips commit (no files to commit)
+
+---
+
+### 9. Preflight Check (Session Boundary Protocol)
+
+**Purpose:** Agents verify environment health before starting work, catching issues early.
+
+**Tool:** `preflight_check()`
+
+**What it checks:**
+- Progress summary (blocked tasks, in-progress count)
+- Git status (clean/dirty, branch, uncommitted files)
+- Dev server (optional)
+- Baseline tests (optional)
+
+**Usage:**
+```typescript
+// Basic check
+preflight_check({})
+
+// With optional checks
+preflight_check({
+  checkDevServer: true,
+  devServerPort: 3000,
+  testCommand: "npm test"
+})
+```
+
+**Returns:**
+```typescript
+{
+  healthy: boolean,
+  timestamp: string,
+  checks: {
+    progress: { status: "pass"|"warn"|"fail", blockedTasks: number },
+    git: { status: "pass"|"warn"|"fail", clean: boolean, branch: string },
+    devServer?: { status: "pass"|"warn"|"skip" },
+    tests?: { status: "pass"|"warn"|"fail"|"skip" }
+  },
+  recommendations: string[]
+}
+```
+
+**Agent integration:**
+Agents @agent-me, @agent-ta, and @agent-qa automatically call preflight_check before starting work.
+
+---
+
+### 10. Scope Lock (Two-Agent Enforcement)
+
+**Purpose:** Separates planning (initializer) from execution (worker) to prevent scope creep.
+
+**How it works:**
+- PRDs can be marked `scopeLocked: true`
+- Only `@agent-ta` (Tech Architect) can create tasks for locked PRDs
+- Other agents must use `scope_change_request` to propose changes
+
+**Auto-detection:**
+- FEATURE and EXPERIENCE PRDs auto-lock
+- DEFECT and QUESTION PRDs stay unlocked
+- Detection based on keywords in title/description
+
+**Manual control:**
+```typescript
+// Explicitly lock
+prd_create({
+  title: "Payment system",
+  metadata: { scopeLocked: true }
+})
+
+// Explicitly unlock
+prd_create({
+  title: "Add feature",
+  metadata: { scopeLocked: false }
+})
+```
+
+**Scope change workflow:**
+```typescript
+// Worker agent requests change
+scope_change_request({
+  prdId: "PRD-xxx",
+  requestType: "add_task",
+  description: "Need error handling task",
+  rationale: "Discovered edge case during implementation",
+  requestedBy: "me"
+})
+
+// Review requests
+scope_change_list({ prdId: "PRD-xxx" })
+
+// Approve or reject
+scope_change_review({
+  id: "SCR-xxx",
+  status: "approved",
+  notes: "Good catch"
+})
+```
+
+---
+
+### 11. Task Worktree Isolation
+
+**Purpose:** Isolates risky work in git worktrees - main branch never touched until merge.
+
+**How it works:**
+- Enable with `isolatedWorktree: true` in task metadata
+- On task start: creates `.worktrees/TASK-xxx` with branch `task/task-xxx`
+- On task complete: auto-merges to target branch, cleans up worktree
+- If merge conflicts: task blocked, worktree preserved for manual resolution
+
+**Usage:**
+```typescript
+task_create({
+  title: "Risky refactor",
+  metadata: { isolatedWorktree: true }
+})
+```
+
+**Conflict handling:**
+```typescript
+// Check conflict status
+worktree_conflict_status({ taskId: "TASK-xxx" })
+
+// After manual resolution
+worktree_conflict_resolve({ taskId: "TASK-xxx" })
+```
+
+---
+
+### 12. WebSocket Bridge (Real-time Events)
+
+**Purpose:** Streams Task Copilot events to external consumers (UIs, dashboards).
+
+**Architecture:**
+- Standalone service polling Task Copilot's activity_log
+- JWT authentication per connection
+- Events filtered by initiative
+
+**Starting the bridge:**
+```bash
+cd mcp-servers/websocket-bridge
+JWT_SECRET="secret" WORKSPACE_ID="your-workspace" npm start
+```
+
+**Event types:**
+- `task.create`, `task.update`, `task.complete`
+- `work_product.store`
+- `prd.create`
+- `checkpoint.create`
+
+**Client connection:**
+```javascript
+const ws = new WebSocket('ws://localhost:8765', {
+  headers: { Authorization: 'Bearer <jwt-token>' }
+});
+
+ws.on('message', (data) => {
+  const event = JSON.parse(data);
+  console.log(event.type, event.payload);
+});
+```
+
+---
+
 ## Summary
 
-These 6 enhancement features transform Claude Copilot into a robust, self-improving development system:
+These 12 enhancement features transform Claude Copilot into a robust, self-improving development system:
 
+**Context Engineering (1-6):**
 1. **Self-improving Memory Schema** - Framework learns from agent experiences
 2. **Quality Gates Configuration** - Automated enforcement of code standards
 3. **Activation Mode Detection** - Context-aware execution without manual config
 4. **Git Worktree Isolation** - True parallel development without conflicts
 5. **Continuation Enforcement** - Reliable task completion with runaway protection
 6. **Auto-compaction Threshold** - Efficient token usage at scale
+
+**v1.8 Harness Features (7-12):**
+7. **Verification Enforcement** - Require proof before marking tasks complete
+8. **Auto-Commit on Completion** - Git commits as recovery checkpoints
+9. **Preflight Check** - Environment health verification before work
+10. **Scope Lock** - Two-agent separation of planning and execution
+11. **Task Worktree Isolation** - Isolate risky changes in git worktrees
+12. **WebSocket Bridge** - Real-time event streaming for UIs
 
 **Key Benefits:**
 
