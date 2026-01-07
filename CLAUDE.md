@@ -108,11 +108,14 @@ Ask yourself:
 | `/knowledge-copilot` | Create shared knowledge repo | Machine/Team | Any directory |
 | `/protocol [task]` | Start fresh work session | Session | Project root |
 | `/continue [stream]` | Resume previous work | Session | Project root |
+| `/pause [reason]` | Context switch, save state | Session | Project root |
+| `/map` | Analyze codebase structure | Project | Project root |
 | `/memory` | View memory state and recent activity | Session | Project root |
 
 **Command Arguments (optional):**
 - `/protocol <task>` - Auto-detect task type and route to agent (e.g., `/protocol fix the login bug`)
 - `/continue <stream>` - Resume specific parallel stream (e.g., `/continue Stream-B`)
+- `/pause <reason>` - Create named checkpoint (e.g., `/pause switching to urgent bug`)
 
 ### Agent Selection Matrix
 
@@ -135,6 +138,8 @@ Ask yourself:
 | Build a feature | `/protocol add dark mode UI` | Auto-routes to @agent-sd |
 | Resume yesterday's work | `/continue` | Memory loads automatically |
 | Resume specific stream | `/continue Stream-B` | Loads stream context directly |
+| Context switch mid-task | `/pause switching to X` | Creates checkpoint, switch safely |
+| Understand new codebase | `/map` | Generates PROJECT_MAP.md |
 | View memory state | `/memory` | See current initiative & recent activity |
 | Set up team standards | `/knowledge-copilot` | Create extension repository |
 | Initialize new project | `/setup-project` | Framework installs |
@@ -199,7 +204,7 @@ MCP server providing persistent memory across sessions.
 
 ### 2. Agents
 
-12 specialized agents for complex development tasks.
+13 specialized agents for complex development tasks.
 
 **Location:** `.claude/agents/`
 
@@ -216,6 +221,7 @@ MCP server providing persistent memory across sessions.
 | `uids` | UI Designer | Visual design |
 | `uid` | UI Developer | UI implementation |
 | `cw` | Copywriter | Content/copy |
+| `cco` | Creative Chief Officer | Creative direction |
 | `kc` | Knowledge Copilot | Shared knowledge setup |
 
 ### 3. Skills Copilot
@@ -343,10 +349,13 @@ Streams are automatically archived when switching initiatives via `initiative_li
 
 - **Hierarchical Handoffs**: Multi-agent chains pass 50-char context between agents; only final agent returns to main (~100 tokens vs ~900)
 - **Performance Tracking**: Automatically tracks agent success rates, completion rates by task type and complexity
-- **Checkpoint System**: Create recovery points during long-running tasks; auto-expires after 24h (manual: 7d)
+- **Checkpoint System**: Create recovery points during long-running tasks; auto-expires (extended for manual pauses)
 - **Validation System**: Validates work products for size limits, required structure, completeness before storage
 - **Token Efficiency**: Validation enforces character/token limits to prevent context bloat (warn/reject modes)
 - **Independent Streams**: Parallel work streams with file conflict detection and dependency management (foundation → parallel → integration)
+- **Verification Enforcement**: Opt-in blocking of task completion without acceptance criteria and proof (`metadata.verificationRequired: true`)
+- **Activation Modes**: Auto-detected from keywords (ultrawork, analyze, quick, thorough); ultrawork warns when >3 subtasks
+- **Progress Visibility**: ASCII progress bars, milestone tracking in PRDs, velocity trends (improving/stable/declining)
 
 ### 5. Protocol
 
@@ -363,6 +372,8 @@ Commands enforcing battle-tested workflows.
 | `/knowledge-copilot` | User | Build or link shared knowledge repository |
 | `/protocol [task]` | Project | Start fresh work with Agent-First Protocol |
 | `/continue [stream]` | Project | Resume previous work via Memory Copilot |
+| `/pause [reason]` | Project | Create named checkpoint for context switching |
+| `/map` | Project | Generate PROJECT_MAP.md with codebase analysis |
 | `/memory` | Project | View current memory state and recent activity |
 
 **Quick Start Examples:**
@@ -370,6 +381,8 @@ Commands enforcing battle-tested workflows.
 /protocol fix login authentication bug        → Auto-routes to @agent-qa
 /protocol add dark mode to dashboard          → Auto-routes to @agent-sd
 /continue Stream-B                            → Resume parallel stream work
+/pause switching to urgent bug                → Create checkpoint with reason
+/map                                          → Generate project structure map
 ```
 
 ---

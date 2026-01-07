@@ -101,6 +101,21 @@ Breakthrough Method for Agile AI Driven Development with 21 specialized agents a
 - Battle-tested workflows for agile development
 - Expansion pack isolation patterns
 
+### Get Shit Done (GSD)
+**Source:** [github.com/glittercowboy/get-shit-done](https://github.com/glittercowboy/get-shit-done)
+**Author:** [glittercowboy](https://github.com/glittercowboy)
+
+A productivity-focused Claude Code configuration emphasizing execution over planning. GSD's pragmatic approach to developer experience directly inspired five enhancements in Task Copilot v1.8:
+
+**Key Learnings:**
+- **Verification Enforcement**: Require proof of completion before marking tasks done
+- **Atomic Execution Modes**: "Ultrawork" mode for quick tasks with subtask limits
+- **Progress Visibility**: ASCII progress bars and velocity tracking
+- **Enhanced Pause/Resume**: Named checkpoints with extended expiry for context switching
+- **Codebase Mapping**: Project structure analysis for faster agent navigation
+
+The GSD philosophy of "bias toward action" influenced our shift from passive task tracking to active execution enforcement.
+
 ---
 
 ## Standards & Specifications
