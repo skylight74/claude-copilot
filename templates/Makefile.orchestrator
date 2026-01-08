@@ -32,8 +32,10 @@ help:
 	@echo ""
 	@echo "=== Sessions ==="
 	@echo "  orchestrator              Start orchestrator session"
-	@echo "  worker REPO=x TASK=y      Start worker in repo x"
-	@echo "  worker-new REPO=x TASK=y  Create feature + start worker"
+	@echo "  worker REPO=x TASK=y      Resume worker (existing worktree)"
+	@echo "  worker-new REPO=x TASK=y  Create worktree + start worker"
+	@echo "  worker-clean REPO=x TASK=y  Remove worktree when done"
+	@echo "  worktrees                 List all active worktrees"
 	@echo ""
 	@echo "=== Status ==="
 	@echo "  status                    All repos overview"
@@ -92,9 +94,15 @@ orchestrator:
 	@WORKSPACE_ID="$(WORKSPACE_ID)" claude
 
 #=============================================================================
-# GENERIC WORKER SESSIONS
+# WORKTREE CONFIGURATION
 #=============================================================================
-.PHONY: worker worker-new
+# Worktrees are created in .worktrees/ directory
+WORKTREE_DIR := .worktrees
+
+#=============================================================================
+# GENERIC WORKER SESSIONS (using git worktrees)
+#=============================================================================
+.PHONY: worker worker-new worker-clean worktrees
 
 worker:
 ifndef REPO
@@ -108,22 +116,21 @@ endif
 		echo "Available repos: $(REPOS)"; \
 		exit 1; \
 	fi
-	@echo "═══════════════════════════════════════════════════════════════"
-	@echo "  WORKER SESSION - $(REPO)"
-	@echo "  Task: $(TASK)"
-	@echo "═══════════════════════════════════════════════════════════════"
-	@cd $(REPO) && \
-	if git show-ref --verify --quiet refs/heads/feature/$(TASK); then \
-		git checkout feature/$(TASK); \
-		echo "Switched to: feature/$(TASK)"; \
+	@WORKTREE_PATH="$(WORKTREE_DIR)/$(REPO)-$(TASK)"; \
+	if [ -d "$$WORKTREE_PATH" ]; then \
+		echo "═══════════════════════════════════════════════════════════════"; \
+		echo "  WORKER SESSION - $(REPO) (worktree)"; \
+		echo "  Task: $(TASK)"; \
+		echo "  Path: $$WORKTREE_PATH"; \
+		echo "═══════════════════════════════════════════════════════════════"; \
+		echo ""; \
+		echo "Tip: Use /worker to start working"; \
+		cd "$$WORKTREE_PATH" && WORKSPACE_ID="$(WORKSPACE_ID)" claude; \
 	else \
-		echo "Branch feature/$(TASK) not found."; \
+		echo "Worktree for $(REPO)/$(TASK) not found."; \
 		echo "Use 'make worker-new REPO=$(REPO) TASK=$(TASK)' to create it."; \
 		exit 1; \
 	fi
-	@echo ""
-	@echo "Tip: Use /worker to start working"
-	@cd $(REPO) && WORKSPACE_ID="$(WORKSPACE_ID)" claude
 
 worker-new:
 ifndef REPO
@@ -137,12 +144,87 @@ endif
 		echo "Available repos: $(REPOS)"; \
 		exit 1; \
 	fi
-	@echo "Creating feature/$(TASK) in $(REPO)..."
-	@cd $(REPO) && git flow feature start $(TASK)
-	@echo "Created branch: feature/$(TASK)"
+	@mkdir -p $(WORKTREE_DIR)
+	@WORKTREE_PATH="$(WORKTREE_DIR)/$(REPO)-$(TASK)"; \
+	if [ -d "$$WORKTREE_PATH" ]; then \
+		echo "Worktree already exists at $$WORKTREE_PATH"; \
+		echo "Use 'make worker REPO=$(REPO) TASK=$(TASK)' to resume."; \
+		exit 1; \
+	fi
+	@echo "Creating feature branch and worktree for $(TASK) in $(REPO)..."
+	@cd $(REPO) && \
+	git fetch origin develop 2>/dev/null || true && \
+	if git show-ref --verify --quiet refs/heads/feature/$(TASK); then \
+		echo "Branch feature/$(TASK) already exists."; \
+	else \
+		echo "Creating feature branch via git flow..."; \
+		git flow feature start $(TASK); \
+		git checkout develop; \
+	fi && \
+	echo "Creating worktree from feature/$(TASK)..." && \
+	git worktree add "../$(WORKTREE_DIR)/$(REPO)-$(TASK)" feature/$(TASK)
+	@WORKTREE_PATH="$(WORKTREE_DIR)/$(REPO)-$(TASK)"; \
+	echo ""; \
+	echo "═══════════════════════════════════════════════════════════════"; \
+	echo "  WORKER SESSION - $(REPO) (worktree)"; \
+	echo "  Task: $(TASK)"; \
+	echo "  Branch: feature/$(TASK)"; \
+	echo "  Path: $$WORKTREE_PATH"; \
+	echo "═══════════════════════════════════════════════════════════════"; \
+	echo ""; \
+	echo "Tip: Use /worker to start working"; \
+	cd "$$WORKTREE_PATH" && WORKSPACE_ID="$(WORKSPACE_ID)" claude
+
+worker-clean:
+ifndef REPO
+	$(error REPO is required. Usage: make worker-clean REPO=repo-name TASK=feature-name)
+endif
+ifndef TASK
+	$(error TASK is required. Usage: make worker-clean REPO=$(REPO) TASK=feature-name)
+endif
+	@WORKTREE_PATH="$(WORKTREE_DIR)/$(REPO)-$(TASK)"; \
+	if [ -d "$$WORKTREE_PATH" ]; then \
+		echo "Removing worktree: $$WORKTREE_PATH"; \
+		cd $(REPO) && git worktree remove "../$$WORKTREE_PATH" --force 2>/dev/null || rm -rf "../$$WORKTREE_PATH"; \
+		echo "Worktree removed."; \
+		echo ""; \
+		echo "Branch feature/$(TASK) still exists. To delete:"; \
+		echo "  cd $(REPO) && git branch -d feature/$(TASK)"; \
+	else \
+		echo "Worktree not found: $$WORKTREE_PATH"; \
+	fi
+
+worktrees:
+	@echo "═══════════════════════════════════════════════════════════════"
+	@echo "  Active Worktrees"
+	@echo "═══════════════════════════════════════════════════════════════"
+	@if [ -d "$(WORKTREE_DIR)" ] && [ "$$(ls -A $(WORKTREE_DIR) 2>/dev/null)" ]; then \
+		for wt in $(WORKTREE_DIR)/*/; do \
+			if [ -d "$$wt" ]; then \
+				WT_NAME=$$(basename "$$wt"); \
+				BRANCH=$$(cd "$$wt" && git branch --show-current 2>/dev/null || echo "unknown"); \
+				CHANGES=$$(cd "$$wt" && git status -s 2>/dev/null | wc -l); \
+				echo "  $$WT_NAME"; \
+				echo "    Branch: $$BRANCH"; \
+				echo "    Changes: $$CHANGES uncommitted"; \
+				echo ""; \
+			fi; \
+		done; \
+	else \
+		echo "  No active worktrees."; \
+		echo ""; \
+		echo "  Create one with:"; \
+		echo "    make worker-new REPO=<repo> TASK=<task>"; \
+	fi
 	@echo ""
-	@echo "Tip: Use /worker to start working"
-	@cd $(REPO) && WORKSPACE_ID="$(WORKSPACE_ID)" claude
+	@echo "Repo worktree status:"
+	@for repo in $(REPOS); do \
+		if [ -d "$$repo" ]; then \
+			echo ""; \
+			echo "=== $$repo ==="; \
+			cd $$repo && git worktree list 2>/dev/null && cd ..; \
+		fi; \
+	done
 
 #=============================================================================
 # STATUS
