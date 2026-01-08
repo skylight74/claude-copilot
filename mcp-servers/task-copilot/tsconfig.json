@@ -19,8 +19,7 @@
   "exclude": [
     "node_modules",
     "dist",
-    "**/__tests__/**",
     "**/*.test.ts",
-    "**/verify-*.ts"
+    "**/__tests__/**"
   ]
 }

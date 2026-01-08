@@ -4,7 +4,52 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseClient } from '../database.js';
-import type { PrdCreateInput, PrdGetInput, PrdListInput, PrdRow } from '../types.js';
+import type { PrdCreateInput, PrdGetInput, PrdListInput, PrdRow, PrdMetadata } from '../types.js';
+
+/**
+ * Detect PRD type from title and description
+ */
+function detectPrdType(title: string, description?: string): 'FEATURE' | 'EXPERIENCE' | 'DEFECT' | 'QUESTION' | 'TECHNICAL' {
+  const text = `${title} ${description || ''}`.toLowerCase();
+
+  // Check for DEFECT keywords
+  if (/\b(fix|bug|error|broken|issue|crash|fail)\b/.test(text)) {
+    return 'DEFECT';
+  }
+
+  // Check for QUESTION keywords
+  if (/\b(how|what|why|explain|investigate|research|explore)\b/.test(text)) {
+    return 'QUESTION';
+  }
+
+  // Check for EXPERIENCE keywords (UI/UX work)
+  if (/\b(ui|ux|design|interface|modal|form|screen|page|layout|component|visual|interaction)\b/.test(text)) {
+    return 'EXPERIENCE';
+  }
+
+  // Check for FEATURE keywords
+  if (/\b(add|implement|create|build|develop|introduce|enable)\b/.test(text)) {
+    return 'FEATURE';
+  }
+
+  // Default to TECHNICAL for other cases
+  return 'TECHNICAL';
+}
+
+/**
+ * Get default scopeLocked value based on PRD type
+ */
+function getDefaultScopeLocked(prdType: string): boolean {
+  const scopeLockedDefaults: Record<string, boolean> = {
+    'FEATURE': true,      // Lock scope for features
+    'EXPERIENCE': true,   // Lock scope for UX work
+    'DEFECT': false,      // Allow flexibility for bug fixes
+    'QUESTION': false,    // Questions don't need lock
+    'TECHNICAL': false    // Default to unlocked
+  };
+
+  return scopeLockedDefaults[prdType] ?? false;
+}
 
 export async function prdCreate(
   db: DatabaseClient,
@@ -28,7 +73,20 @@ export async function prdCreate(
     db.upsertInitiative(initiative);
   }
 
-  const metadata = input.metadata || {};
+  // Auto-detect PRD type from title and description
+  const prdType = detectPrdType(input.title, input.description);
+
+  // Build metadata with auto-detection and defaults
+  const metadata: PrdMetadata = {
+    ...(input.metadata || {}),
+    prdType
+  };
+
+  // Apply default scopeLocked if not explicitly set
+  if (metadata.scopeLocked === undefined) {
+    metadata.scopeLocked = getDefaultScopeLocked(prdType);
+  }
+
   const prd: PrdRow = {
     id,
     initiative_id: initiative.id,
@@ -49,7 +107,13 @@ export async function prdCreate(
     initiative_id: initiative.id,
     type: 'prd_created',
     entity_id: id,
+    entity_type: 'prd',
     summary: `Created PRD: ${input.title}`,
+    metadata: JSON.stringify({
+      prdId: id,
+      title: input.title,
+      contentLength: input.content.length
+    }),
     created_at: now
   });
 

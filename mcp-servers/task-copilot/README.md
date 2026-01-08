@@ -79,13 +79,33 @@ By default, each project gets a unique database based on its path hash. Set `WOR
 ### PRD Tools
 
 #### prd_create
-Create a new PRD.
+Create a new PRD with auto-detection of type and scope lock behavior.
 
 **Input:**
 - `title` (string, required): PRD title
 - `description` (string): PRD description
 - `content` (string, required): Full PRD content
-- `metadata` (object): Optional metadata (priority, complexity, tags)
+- `metadata` (object): Optional metadata (priority, complexity, tags, scopeLocked)
+
+**Auto-Detection (v1.8+):**
+The PRD type is automatically detected from title/description keywords:
+- **FEATURE**: "add", "implement", "create", "build" → `scopeLocked: true`
+- **EXPERIENCE**: "UI", "UX", "design", "interface", "modal" → `scopeLocked: true`
+- **DEFECT**: "fix", "bug", "error", "broken" → `scopeLocked: false`
+- **QUESTION**: "how", "what", "why", "explain" → `scopeLocked: false`
+- **TECHNICAL**: Default for other cases → `scopeLocked: false`
+
+The detected type is stored in `metadata.prdType` and `metadata.scopeLocked` is set to the default for that type unless explicitly overridden.
+
+**Override Default:**
+```typescript
+// Force scope to be unlocked even for FEATURE
+prd_create({
+  title: "Add dark mode support",
+  content: "...",
+  metadata: { scopeLocked: false }  // Explicit override
+})
+```
 
 **Output:**
 ```json

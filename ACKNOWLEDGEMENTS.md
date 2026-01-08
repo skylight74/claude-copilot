@@ -6,6 +6,45 @@ Claude Copilot builds upon the work of many talented developers and open source 
 
 ## Inspiration & Patterns
 
+### Effective Harnesses for Long-Running Agents
+**Source:** [anthropic.com/engineering/effective-harnesses-for-long-running-agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
+**Author:** Anthropic Engineering
+
+Anthropic's engineering guide on building harnesses for long-running agents directly inspired our v1.8 harness enhancements. The article's two-agent architecture (initializer + coding agent), session boundary protocols, and git-as-checkpoint patterns were implemented in Task Copilot.
+
+**Key Learnings:**
+- Two-agent separation: initializer creates immutable feature list, worker executes
+- Session startup ritual: verify environment before starting work
+- Progress files as handoff documentation between agent sessions
+- Git commits as recovery checkpoints for multi-session work
+- "Early victory declaration" failure mode and mitigations
+
+### AutoCoder
+**Source:** [github.com/leonvanzyl/autocoder](https://github.com/leonvanzyl/autocoder)
+**Author:** [leonvanzyl](https://github.com/leonvanzyl)
+
+A long-running autonomous coding agent built on Claude Agent SDK. AutoCoder's elegant approach to session continuity via SQLite state persistence (rather than context window) directly influenced our Task Copilot architecture.
+
+**Key Learnings:**
+- SQLite-based feature tracking for multi-session progress
+- MCP tools for feature status (`feature_get_next`, `feature_mark_passing`)
+- Pause/resume via process restart with durable state
+- WebSocket real-time streaming for progress visibility
+- Regression testing integration during autonomous builds
+
+### Automaker
+**Source:** [github.com/AutoMaker-Org/automaker](https://github.com/AutoMaker-Org/automaker)
+**Author:** [AutoMaker-Org](https://github.com/AutoMaker-Org)
+
+AI-powered development studio with visual Kanban interface for non-developers. Automaker's git worktree isolation pattern and plan approval workflow inspired our v1.8 worktree integration and scope locking features.
+
+**Key Learnings:**
+- Git worktree isolation per feature (protected main branch)
+- Plan approval workflow (human-in-the-loop before execution)
+- Event-driven WebSocket streaming architecture
+- Visual task management for non-technical users
+- Multi-agent task execution with focused problem-solving
+
 ### Ralph Wiggum Iteration Pattern
 **Source:** [github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum](https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum)
 
@@ -145,6 +184,8 @@ The MCP servers in this framework use the following open source libraries:
 - **[better-sqlite3](https://www.npmjs.com/package/better-sqlite3)** - SQLite database driver
 - **[zod](https://www.npmjs.com/package/zod)** - TypeScript schema validation
 - **[ajv](https://www.npmjs.com/package/ajv)** - JSON Schema validator
+- **[ws](https://www.npmjs.com/package/ws)** - WebSocket client and server
+- **[jsonwebtoken](https://www.npmjs.com/package/jsonwebtoken)** - JWT authentication
 
 ---
 

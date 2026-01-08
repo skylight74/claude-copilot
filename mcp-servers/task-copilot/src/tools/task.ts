@@ -21,6 +21,8 @@ import { detectActivationMode, isValidActivationMode } from '../utils/mode-detec
 import { executeQualityGates, shouldEnforceQualityGates } from './quality-gates.js';
 import { requiresVerification, validateTaskCompletion } from '../validation/verification-rules.js';
 import { validateActivationMode, shouldValidateActivationMode } from '../validation/activation-mode-rules.js';
+import { GitHelper } from '../utils/git-helper.js';
+import { WorktreeManager } from '../utils/worktree-manager.js';
 
 export async function taskCreate(
   db: DatabaseClient,
@@ -28,6 +30,24 @@ export async function taskCreate(
 ): Promise<{ id: string; prdId?: string; parentId?: string; status: TaskStatus; createdAt: string }> {
   const now = new Date().toISOString();
   const id = `TASK-${uuidv4()}`;
+
+  // Check scope lock if creating task under a PRD
+  if (input.prdId) {
+    const prd = db.getPrd(input.prdId);
+    if (prd) {
+      const prdMetadata = JSON.parse(prd.metadata);
+      if (prdMetadata.scopeLocked === true) {
+        // Scope is locked - only @agent-ta can create tasks
+        const assignedAgent = input.assignedAgent;
+        if (assignedAgent !== 'ta') {
+          throw new Error(
+            `Scope is locked for PRD ${input.prdId}. Only @agent-ta can create tasks. ` +
+            `Use scope_change_request to request scope changes.`
+          );
+        }
+      }
+    }
+  }
 
   const metadata = input.metadata || {};
 
@@ -43,6 +63,15 @@ export async function taskCreate(
   } else if (metadata.activationMode !== null && !isValidActivationMode(metadata.activationMode as string)) {
     // Validate explicit mode if provided
     throw new Error(`Invalid activationMode: "${metadata.activationMode}". Must be one of: ultrawork, analyze, quick, thorough, or null`);
+  }
+
+  // Default verificationRequired to true for complex tasks
+  // Only auto-set if not explicitly provided
+  if (metadata.verificationRequired === undefined) {
+    const complexity = metadata.complexity;
+    if (complexity === 'High' || complexity === 'Very High') {
+      metadata.verificationRequired = true;
+    }
   }
 
   // Validate stream dependencies if streamId and streamDependencies are provided
@@ -119,7 +148,15 @@ export async function taskCreate(
       initiative_id: initiativeId,
       type: 'task_created',
       entity_id: id,
+      entity_type: 'task',
       summary: `Created task: ${input.title}`,
+      metadata: JSON.stringify({
+        taskId: id,
+        prdId: input.prdId,
+        parentId: input.parentId,
+        assignedAgent: input.assignedAgent,
+        activationMode: metadata.activationMode
+      }),
       created_at: now
     });
   }
@@ -266,15 +303,30 @@ export async function taskUpdate(
     if (task.prd_id) {
       const prd = db.getPrd(task.prd_id);
       if (prd) {
+        const eventType = input.status === 'completed' ? 'task_completed' : 'task_updated';
         db.insertActivity({
           id: uuidv4(),
           initiative_id: prd.initiative_id,
-          type: 'task_updated',
+          type: eventType,
           entity_id: input.id,
+          entity_type: 'task',
           summary: `Task ${task.title}: ${task.status} → ${input.status}`,
+          metadata: JSON.stringify({
+            taskId: input.id,
+            previousStatus: task.status,
+            newStatus: input.status,
+            assignedAgent: task.assigned_agent,
+            blockedReason: input.blockedReason
+          }),
           created_at: now
         });
       }
+    }
+
+    // Handle worktree lifecycle on status transitions
+    const metadata = JSON.parse(updates.metadata || task.metadata) as TaskMetadata;
+    if (metadata.isolatedWorktree) {
+      await handleWorktreeLifecycle(db, task, input.id, input.status, metadata);
     }
 
     // Record performance based on status transition
@@ -284,6 +336,11 @@ export async function taskUpdate(
       recordPerformance(db, task, 'blocked', now);
     } else if (input.status === 'cancelled' && task.assigned_agent) {
       recordPerformance(db, task, 'failure', now);
+    }
+
+    // Auto-commit on task completion
+    if (input.status === 'completed') {
+      await handleAutoCommit(db, task, input.id);
     }
 
     // Auto-checkpoint on status transitions to in_progress or blocked
@@ -395,6 +452,146 @@ function createAutoCheckpoint(
   const count = db.getCheckpointCount(task.id);
   if (count > MAX_CHECKPOINTS) {
     db.deleteOldestCheckpoints(task.id, count - MAX_CHECKPOINTS);
+  }
+}
+
+/**
+ * Handle auto-commit on task completion
+ *
+ * Creates a git commit for completed tasks if:
+ * - autoCommit is true (default)
+ * - filesModified array exists and has files
+ * - Git is available and working directory is a git repo
+ *
+ * All errors are handled gracefully - never throws.
+ */
+async function handleAutoCommit(
+  db: DatabaseClient,
+  task: TaskRow,
+  taskId: string
+): Promise<void> {
+  // Get task metadata
+  const metadata = JSON.parse(task.metadata) as TaskMetadata;
+
+  // Check if autoCommit is enabled (default: true)
+  const autoCommitEnabled = metadata.autoCommit !== false;
+
+  if (!autoCommitEnabled) {
+    // Auto-commit explicitly disabled
+    return;
+  }
+
+  // Check if filesModified exists and has files
+  const filesModified = metadata.filesModified;
+  if (!filesModified || !Array.isArray(filesModified) || filesModified.length === 0) {
+    // No files to commit
+    return;
+  }
+
+  // Get work product IDs for commit body
+  const workProducts = db.listWorkProducts(taskId);
+  const workProductIds = workProducts.map(wp => wp.id);
+
+  // Initialize GitHelper
+  const projectRoot = process.cwd();
+  const gitHelper = new GitHelper(projectRoot);
+
+  // Attempt auto-commit
+  const result = await gitHelper.autoCommitTask(
+    taskId,
+    task.title,
+    filesModified,
+    workProductIds
+  );
+
+  // Log result (success or warning) to task notes
+  if (result.success) {
+    const commitNote = `\n\nAuto-commit: ${result.commitHash || 'success'}${result.warning ? ` (${result.warning})` : ''}`;
+    const updatedNotes = (task.notes || '') + commitNote;
+    db.updateTask(taskId, { notes: updatedNotes });
+  } else if (result.warning) {
+    // Log warning but don't fail the task
+    const warningNote = `\n\nAuto-commit skipped: ${result.warning}`;
+    const updatedNotes = (task.notes || '') + warningNote;
+    db.updateTask(taskId, { notes: updatedNotes });
+  }
+}
+
+/**
+ * Handle worktree lifecycle on task status transitions
+ *
+ * - On transition to in_progress: create worktree
+ * - On transition to completed: merge and cleanup worktree
+ */
+async function handleWorktreeLifecycle(
+  db: DatabaseClient,
+  task: TaskRow,
+  taskId: string,
+  newStatus: TaskStatus,
+  metadata: TaskMetadata
+): Promise<void> {
+  const projectRoot = process.cwd();
+  const worktreeManager = new WorktreeManager(projectRoot);
+
+  try {
+    // Create worktree on transition to in_progress
+    if (newStatus === 'in_progress' && !metadata.worktreePath) {
+      const worktreeInfo = await worktreeManager.createTaskWorktree(taskId);
+
+      // Update task metadata with worktree info
+      const updatedMetadata = {
+        ...metadata,
+        worktreePath: worktreeInfo.path,
+        branchName: worktreeInfo.branch
+      };
+
+      db.updateTask(taskId, {
+        metadata: JSON.stringify(updatedMetadata),
+        notes: task.notes
+          ? `${task.notes}\n\nWorktree created: ${worktreeInfo.path} (branch: ${worktreeInfo.branch})`
+          : `Worktree created: ${worktreeInfo.path} (branch: ${worktreeInfo.branch})`
+      });
+    }
+
+    // Merge and cleanup on completion
+    if (newStatus === 'completed' && metadata.worktreePath) {
+      // Attempt to merge the worktree branch
+      const mergeResult = await worktreeManager.mergeTaskWorktree(taskId);
+
+      if (mergeResult.merged) {
+        // Merge successful, cleanup worktree
+        const cleanupResult = await worktreeManager.cleanupTaskWorktree(taskId);
+
+        const cleanupNote = `\n\nWorktree merged and cleaned up: ${mergeResult.message}`;
+        db.updateTask(taskId, {
+          notes: task.notes ? `${task.notes}${cleanupNote}` : cleanupNote
+        });
+      } else if (mergeResult.conflicts && mergeResult.conflicts.length > 0) {
+        // Merge conflicts detected - block completion
+        const conflictList = mergeResult.conflicts.join(', ');
+        const blockedReason = `Merge conflicts detected: ${conflictList}. Manual resolution required.`;
+
+        // Update task to blocked with conflict info
+        db.updateTask(taskId, {
+          status: 'blocked',
+          blocked_reason: blockedReason,
+          notes: task.notes
+            ? `${task.notes}\n\nMerge conflicts in ${mergeResult.conflicts.length} file(s):\n${mergeResult.conflicts.map(f => `- ${f}`).join('\n')}`
+            : `Merge conflicts in ${mergeResult.conflicts.length} file(s):\n${mergeResult.conflicts.map(f => `- ${f}`).join('\n')}`,
+          metadata: JSON.stringify({
+            ...metadata,
+            mergeConflicts: mergeResult.conflicts,
+            mergeConflictTimestamp: new Date().toISOString()
+          })
+        });
+      }
+    }
+  } catch (error: any) {
+    // Log error to task notes but don't fail the status transition
+    const errorNote = `\n\nWorktree operation failed: ${error.message}`;
+    db.updateTask(taskId, {
+      notes: task.notes ? `${task.notes}${errorNote}` : errorNote
+    });
   }
 }
 

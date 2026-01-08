@@ -62,9 +62,9 @@ function validateAcceptanceCriteria(task: TaskRow): VerificationResult['flags'][
  * Validate task has proof/evidence
  *
  * Proof can be:
- * - Work products attached to task
- * - Notes documenting test results
- * - Blocked reason (if blocked, that's the proof)
+ * - Work products attached to task (implementation, test results, etc.)
+ * - Notes documenting completion (test output, screenshot paths, checklist, min 50 chars)
+ * - Blocked reason (if task cannot be completed)
  */
 function validateProof(db: DatabaseClient, task: TaskRow): VerificationResult['flags'][number] | null {
   // Check for work products
@@ -74,6 +74,7 @@ function validateProof(db: DatabaseClient, task: TaskRow): VerificationResult['f
   }
 
   // Check for notes with substantive content (>50 chars)
+  // Notes can contain: test output, screenshot paths, acceptance criteria checklist, etc.
   if (task.notes && task.notes.trim().length >= 50) {
     return null; // Substantive notes are valid proof
   }
@@ -88,7 +89,7 @@ function validateProof(db: DatabaseClient, task: TaskRow): VerificationResult['f
     type: 'proof',
     severity: 'reject',
     message: 'Task completion requires proof/evidence',
-    suggestion: 'Provide evidence of completion via: (1) work_product_store with test results/implementation, (2) task notes documenting what was done (min 50 chars), or (3) blocked_reason if task cannot be completed'
+    suggestion: 'Provide evidence via: (1) work_product_store with implementation/test results, (2) task notes with test output, screenshot paths, or acceptance criteria checklist (min 50 chars), or (3) blocked_reason if task cannot be completed'
   };
 }
 

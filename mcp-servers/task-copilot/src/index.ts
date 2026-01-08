@@ -31,6 +31,9 @@ import {
 } from './tools/stop-hooks.js';
 import { sessionGuard } from './tools/session-guard.js';
 import { agentHandoff, agentChainGet } from './tools/agent-handoff.js';
+import { preflightCheck } from './tools/preflight.js';
+import { worktreeConflictStatus, worktreeConflictResolve } from './tools/worktree.js';
+import { scopeChangeRequest, scopeChangeReview, scopeChangeList } from './tools/scope-change.js';
 import { getValidator, initValidator } from './validation/index.js';
 import type {
   PrdCreateInput,
@@ -62,6 +65,10 @@ import type {
   StreamConflictCheckInput,
   StreamUnarchiveInput,
   StreamArchiveAllInput,
+  PreflightCheckInput,
+  ScopeChangeRequestInput,
+  ScopeChangeReviewInput,
+  ScopeChangeListInput,
   TaskStatus,
   PrdStatus,
   WorkProductType,
@@ -710,6 +717,98 @@ const TOOLS = [
       },
       required: ['confirm']
     }
+  },
+  // Preflight Check (Session Boundary Protocol)
+  {
+    name: 'preflight_check',
+    description: 'Check environment health before starting substantive work. Verifies initiative state, git status, optional dev server and tests. Part of Session Boundary Protocol.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Optional task ID to check preflight config from task metadata' },
+        initiativeId: { type: 'string', description: 'Optional initiative ID (default: current initiative)' },
+        checkDevServer: { type: 'boolean', description: 'Check if dev server is running (default: false unless task specifies)' },
+        devServerPort: { type: 'number', description: 'Port to check for dev server (default: 3000)' },
+        testCommand: { type: 'string', description: 'Test command to run for baseline validation (e.g., "npm test")' }
+      }
+    }
+  },
+  // Worktree Conflict Management
+  {
+    name: 'worktree_conflict_status',
+    description: 'Check conflict status for a task worktree. Returns list of conflicting files if any exist.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to check conflict status for' }
+      },
+      required: ['taskId']
+    }
+  },
+  {
+    name: 'worktree_conflict_resolve',
+    description: 'Retry merge after manual conflict resolution. Attempts to complete merge and mark task as completed if conflicts are resolved.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'Task ID to resolve conflicts for' },
+        targetBranch: { type: 'string', description: 'Target branch to merge into (optional, defaults to current)' }
+      },
+      required: ['taskId']
+    }
+  },
+  // Scope Change Request Tools (P3.3)
+  {
+    name: 'scope_change_request',
+    description: 'Request a scope change for a locked PRD. Worker agents use this when they need to add, modify, or remove tasks from a scope-locked PRD. Only @agent-ta can approve/reject.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prdId: { type: 'string', description: 'PRD ID to request change for' },
+        requestType: {
+          type: 'string',
+          enum: ['add_task', 'modify_task', 'remove_task'],
+          description: 'Type of scope change requested'
+        },
+        description: { type: 'string', description: 'What change is requested (detailed description)' },
+        rationale: { type: 'string', description: 'Why this change is needed (justification)' },
+        requestedBy: { type: 'string', description: 'Agent making the request (e.g., "me", "qa", "doc")' }
+      },
+      required: ['prdId', 'requestType', 'description', 'rationale', 'requestedBy']
+    }
+  },
+  {
+    name: 'scope_change_review',
+    description: 'Review and approve/reject a scope change request. Typically used by @agent-ta or user to approve/reject requests from worker agents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Scope change request ID' },
+        status: {
+          type: 'string',
+          enum: ['approved', 'rejected'],
+          description: 'Decision on the request'
+        },
+        reviewNotes: { type: 'string', description: 'Optional notes explaining the decision' },
+        reviewedBy: { type: 'string', description: 'Who reviewed (e.g., "ta", "user")' }
+      },
+      required: ['id', 'status']
+    }
+  },
+  {
+    name: 'scope_change_list',
+    description: 'List scope change requests. Filter by PRD or status (pending, approved, rejected).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prdId: { type: 'string', description: 'Filter by PRD ID (optional)' },
+        status: {
+          type: 'string',
+          enum: ['pending', 'approved', 'rejected'],
+          description: 'Filter by status (optional)'
+        }
+      }
+    }
   }
 ];
 
@@ -1161,6 +1260,64 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = streamArchiveAll(db, {
           confirm: a.confirm as boolean,
           initiativeId: a.initiativeId as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      // Preflight Check
+      case 'preflight_check': {
+        const result = await preflightCheck(db, {
+          taskId: a.taskId as string | undefined,
+          initiativeId: a.initiativeId as string | undefined,
+          checkDevServer: a.checkDevServer as boolean | undefined,
+          devServerPort: a.devServerPort as number | undefined,
+          testCommand: a.testCommand as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      // Worktree Conflict Management
+      case 'worktree_conflict_status': {
+        const result = await worktreeConflictStatus(db, {
+          taskId: a.taskId as string
+        });
+        return { content: [{ type: 'text', text: result ? JSON.stringify(result) : 'Task not found' }] };
+      }
+
+      case 'worktree_conflict_resolve': {
+        const result = await worktreeConflictResolve(db, {
+          taskId: a.taskId as string,
+          targetBranch: a.targetBranch as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      // Scope Change Request Tools (P3.3)
+      case 'scope_change_request': {
+        const result = scopeChangeRequest(db, {
+          prdId: a.prdId as string,
+          requestType: a.requestType as 'add_task' | 'modify_task' | 'remove_task',
+          description: a.description as string,
+          rationale: a.rationale as string,
+          requestedBy: a.requestedBy as string
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'scope_change_review': {
+        const result = scopeChangeReview(db, {
+          id: a.id as string,
+          status: a.status as 'approved' | 'rejected',
+          reviewNotes: a.reviewNotes as string | undefined,
+          reviewedBy: a.reviewedBy as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'scope_change_list': {
+        const result = scopeChangeList(db, {
+          prdId: a.prdId as string | undefined,
+          status: a.status as 'pending' | 'approved' | 'rejected' | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
