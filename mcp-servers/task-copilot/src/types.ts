@@ -967,3 +967,44 @@ export interface ScopeChangeListInput {
   prdId?: string;
   status?: ScopeChangeRequestStatus;
 }
+
+// ============================================================================
+// AGENT ACTIVITY TYPES
+// ============================================================================
+
+export interface AgentActivityRow {
+  id: string;
+  stream_id: string;
+  agent_id: string;
+  task_id: string;
+  activity_description: string | null;
+  phase: string | null;
+  started_at: string;
+  last_heartbeat: string;
+  completed_at: string | null;
+}
+
+export interface AgentActivity {
+  streamId: string;
+  streamName: string;
+  agentId: string;
+  agentName: string;
+  taskId: string;
+  taskTitle: string;
+  activityDescription?: string;
+  phase?: string;
+  startedAt: string;
+  lastHeartbeat: string;
+  isActive: boolean;
+}
+
+export interface AgentActivityListInput {
+  streamId?: string;
+  activeOnly?: boolean;
+}
+
+export interface AgentActivityListOutput {
+  activities: AgentActivity[];
+  totalActive: number;
+  totalIdle: number;
+}

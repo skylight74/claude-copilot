@@ -213,6 +213,27 @@ CREATE INDEX IF NOT EXISTS idx_scope_requests_status ON scope_change_requests(st
 CREATE INDEX IF NOT EXISTS idx_scope_requests_created ON scope_change_requests(created_at DESC);
 `;
 
+// Migration SQL for version 8: Agent Activity Tracking
+const MIGRATION_V8_SQL = `
+-- agent_activity table
+CREATE TABLE IF NOT EXISTS agent_activity (
+  id TEXT PRIMARY KEY,
+  stream_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  activity_description TEXT,
+  phase TEXT,
+  started_at TEXT NOT NULL,
+  last_heartbeat TEXT NOT NULL,
+  completed_at TEXT,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_activity_stream ON agent_activity(stream_id);
+CREATE INDEX IF NOT EXISTS idx_agent_activity_task ON agent_activity(task_id);
+CREATE INDEX IF NOT EXISTS idx_agent_activity_heartbeat ON agent_activity(last_heartbeat DESC);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -220,7 +241,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 8;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -320,6 +341,15 @@ export class DatabaseClient {
       this.db.exec(MIGRATION_V7_SQL);
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
         7,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v8: Agent Activity Tracking
+    if (currentVersion < 8) {
+      this.db.exec(MIGRATION_V8_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        8,
         new Date().toISOString()
       );
     }
@@ -1194,6 +1224,127 @@ export class DatabaseClient {
       updates.review_notes || null,
       id
     );
+  }
+
+  // ============================================================================
+  // AGENT ACTIVITY TRACKING
+  // ============================================================================
+
+  /**
+   * Upsert agent activity record
+   * Creates new record or updates existing one for the task
+   */
+  upsertAgentActivity(data: {
+    stream_id: string;
+    agent_id: string;
+    task_id: string;
+    activity_description?: string;
+    phase?: string;
+  }): void {
+    const now = new Date().toISOString();
+    const id = `ACTIVITY-${data.task_id}`;
+
+    this.db.prepare(`
+      INSERT INTO agent_activity (id, stream_id, agent_id, task_id, activity_description, phase, started_at, last_heartbeat, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+      ON CONFLICT(id) DO UPDATE SET
+        stream_id = excluded.stream_id,
+        agent_id = excluded.agent_id,
+        activity_description = excluded.activity_description,
+        phase = excluded.phase,
+        last_heartbeat = excluded.last_heartbeat
+    `).run(
+      id,
+      data.stream_id,
+      data.agent_id,
+      data.task_id,
+      data.activity_description || null,
+      data.phase || null,
+      now,
+      now
+    );
+  }
+
+  /**
+   * Update heartbeat timestamp for a task (for long-running tasks)
+   */
+  updateAgentHeartbeat(taskId: string, phase?: string): void {
+    const now = new Date().toISOString();
+    const id = `ACTIVITY-${taskId}`;
+
+    if (phase !== undefined) {
+      this.db.prepare(`
+        UPDATE agent_activity
+        SET last_heartbeat = ?, phase = ?
+        WHERE id = ?
+      `).run(now, phase, id);
+    } else {
+      this.db.prepare(`
+        UPDATE agent_activity
+        SET last_heartbeat = ?
+        WHERE id = ?
+      `).run(now, id);
+    }
+  }
+
+  /**
+   * Mark agent activity as complete
+   */
+  completeAgentActivity(taskId: string): void {
+    const now = new Date().toISOString();
+    const id = `ACTIVITY-${taskId}`;
+
+    this.db.prepare(`
+      UPDATE agent_activity
+      SET completed_at = ?
+      WHERE id = ?
+    `).run(now, id);
+  }
+
+  /**
+   * Get agent activities
+   * By default, returns only active (incomplete) activities
+   */
+  getAgentActivities(options: {
+    streamId?: string;
+    activeOnly?: boolean;
+  }): Array<{
+    id: string;
+    stream_id: string;
+    agent_id: string;
+    task_id: string;
+    activity_description: string | null;
+    phase: string | null;
+    started_at: string;
+    last_heartbeat: string;
+    completed_at: string | null;
+  }> {
+    let sql = 'SELECT * FROM agent_activity WHERE 1=1';
+    const params: unknown[] = [];
+
+    if (options.streamId) {
+      sql += ' AND stream_id = ?';
+      params.push(options.streamId);
+    }
+
+    // Default: only show active (incomplete) activities
+    if (options.activeOnly !== false) {
+      sql += ' AND completed_at IS NULL';
+    }
+
+    sql += ' ORDER BY last_heartbeat DESC';
+
+    return this.db.prepare(sql).all(...params) as Array<{
+      id: string;
+      stream_id: string;
+      agent_id: string;
+      task_id: string;
+      activity_description: string | null;
+      phase: string | null;
+      started_at: string;
+      last_heartbeat: string;
+      completed_at: string | null;
+    }>;
   }
 
   close(): void {

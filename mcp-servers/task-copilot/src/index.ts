@@ -35,6 +35,7 @@ import { preflightCheck } from './tools/preflight.js';
 import { worktreeConflictStatus, worktreeConflictResolve } from './tools/worktree.js';
 import { scopeChangeRequest, scopeChangeReview, scopeChangeList } from './tools/scope-change.js';
 import { getValidator, initValidator } from './validation/index.js';
+import { createHttpServer } from './http-server.js';
 import type {
   PrdCreateInput,
   PrdGetInput,
@@ -86,6 +87,8 @@ const PROJECT_PATH = process.cwd();
 const TASK_DB_PATH = process.env.TASK_DB_PATH || undefined;
 const WORKSPACE_ID = process.env.WORKSPACE_ID || undefined;
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const HTTP_API_HOST = process.env.HTTP_API_HOST || '127.0.0.1';
+const HTTP_API_PORT = parseInt(process.env.HTTP_API_PORT || '9090', 10);
 
 // Initialize database
 const db = new DatabaseClient(PROJECT_PATH, TASK_DB_PATH, WORKSPACE_ID);
@@ -1349,11 +1352,24 @@ async function main() {
     console.error(`Cleaned up ${expiredCount} expired checkpoints`);
   }
 
+  // Start MCP server
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   if (LOG_LEVEL === 'debug') {
     console.error('Task Copilot server running');
+  }
+
+  // Start HTTP API server
+  try {
+    await createHttpServer({
+      host: HTTP_API_HOST,
+      port: HTTP_API_PORT,
+      db
+    });
+  } catch (error) {
+    console.error('Failed to start HTTP API server:', error);
+    // Don't fail if HTTP server fails - MCP server should still work
   }
 }
 

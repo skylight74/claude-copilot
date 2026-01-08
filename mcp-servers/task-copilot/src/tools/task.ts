@@ -323,6 +323,25 @@ export async function taskUpdate(
       }
     }
 
+    // Track agent activity
+    const taskMetadata = JSON.parse(updates.metadata || task.metadata) as TaskMetadata;
+    const assignedAgent = updates.assigned_agent || task.assigned_agent;
+
+    if (input.status === 'in_progress' && assignedAgent) {
+      // Start tracking activity when task goes in_progress
+      const streamId = taskMetadata.streamId || 'default';
+      db.upsertAgentActivity({
+        stream_id: streamId,
+        agent_id: assignedAgent,
+        task_id: input.id,
+        activity_description: task.title,
+        phase: taskMetadata.phase
+      });
+    } else if (input.status === 'completed') {
+      // Mark activity as complete
+      db.completeAgentActivity(input.id);
+    }
+
     // Handle worktree lifecycle on status transitions
     const metadata = JSON.parse(updates.metadata || task.metadata) as TaskMetadata;
     if (metadata.isolatedWorktree) {
