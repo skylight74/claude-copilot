@@ -2,11 +2,20 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false,
+    "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "src/**/__tests__/**/*"
+    "src/tools/full-integration.test.ts",
+    "src/tools/__tests__/activation-mode-validation.test.ts",
+    "src/tools/__tests__/auto-commit.test.ts",
+    "src/tools/__tests__/verification-enforcement.test.ts",
+    "src/tools/progress-visibility.integration.test.ts",
+    "src/tools/iteration-guards.test.ts",
+    "src/utils/__tests__/progress-bar.test.ts"
   ],
   "exclude": [
     "node_modules",

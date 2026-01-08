@@ -439,9 +439,9 @@ async function testVelocityTrends(): Promise<void> {
   const velocity7d = summary.velocity!.find(v => v.period === '7d');
 
   assert(!!velocity7d, '7d velocity should exist');
-  assert(velocity7d.tasksCompleted === 8, 'Should have 8 completed tasks');
+  assert(velocity7d!.tasksCompleted === 8, 'Should have 8 completed tasks');
   // Trend should be 'improving' because second half has more tasks (6 vs 2)
-  assert(velocity7d.trend === 'improving', 'Trend should be improving');
+  assert(velocity7d!.trend === 'improving', 'Trend should be improving');
 
   db.close();
 }
@@ -473,7 +473,7 @@ async function testDecliningVelocity(): Promise<void> {
   const velocity7d = summary.velocity!.find(v => v.period === '7d');
 
   assert(!!velocity7d, '7d velocity should exist');
-  assert(velocity7d.trend === 'declining', 'Trend should be declining');
+  assert(velocity7d!.trend === 'declining', 'Trend should be declining');
 
   db.close();
 }
@@ -505,7 +505,7 @@ async function testStableVelocity(): Promise<void> {
   const velocity7d = summary.velocity!.find(v => v.period === '7d');
 
   assert(!!velocity7d, '7d velocity should exist');
-  assert(velocity7d.trend === 'stable', 'Trend should be stable');
+  assert(velocity7d!.trend === 'stable', 'Trend should be stable');
 
   db.close();
 }
@@ -528,8 +528,8 @@ async function testInsufficientDataVelocity(): Promise<void> {
   const velocity7d = summary.velocity!.find(v => v.period === '7d');
 
   assert(!!velocity7d, '7d velocity should exist');
-  assert(velocity7d.tasksCompleted === 2, 'Should have 2 completed tasks');
-  assert(velocity7d.trend === 'insufficient_data', 'Trend should be insufficient_data');
+  assert(velocity7d!.tasksCompleted === 2, 'Should have 2 completed tasks');
+  assert(velocity7d!.trend === 'insufficient_data', 'Trend should be insufficient_data');
 
   db.close();
 }
@@ -554,24 +554,24 @@ async function testMultiplePeriodVelocity(): Promise<void> {
   const summary = progressSummary(db, { initiativeId });
 
   assert(!!summary.velocity, 'Velocity should exist');
-  assert(summary.velocity.length === 3, 'Should have 3 velocity periods');
+  assert(summary.velocity!.length === 3, 'Should have 3 velocity periods');
 
-  const velocity7d = summary.velocity.find(v => v.period === '7d');
-  const velocity14d = summary.velocity.find(v => v.period === '14d');
-  const velocity30d = summary.velocity.find(v => v.period === '30d');
+  const velocity7d = summary.velocity!.find(v => v.period === '7d');
+  const velocity14d = summary.velocity!.find(v => v.period === '14d');
+  const velocity30d = summary.velocity!.find(v => v.period === '30d');
 
   assert(!!velocity7d, '7d velocity should exist');
   assert(!!velocity14d, '14d velocity should exist');
   assert(!!velocity30d, '30d velocity should exist');
 
-  assert(velocity7d.tasksCompleted === 7, '7d should have 7 tasks');
-  assert(velocity14d.tasksCompleted === 14, '14d should have 14 tasks');
-  assert(velocity30d.tasksCompleted === 20, '30d should have 20 tasks');
+  assert(velocity7d!.tasksCompleted === 7, '7d should have 7 tasks');
+  assert(velocity14d!.tasksCompleted === 14, '14d should have 14 tasks');
+  assert(velocity30d!.tasksCompleted === 20, '30d should have 20 tasks');
 
   // Verify tasks per day calculation
-  assert(velocity7d.tasksPerDay === 1, '7d should be 1 task/day');
-  assert(velocity14d.tasksPerDay === 1, '14d should be 1 task/day');
-  assert(Math.abs(velocity30d.tasksPerDay - 0.67) < 0.01, '30d should be ~0.67 tasks/day');
+  assert(velocity7d!.tasksPerDay === 1, '7d should be 1 task/day');
+  assert(velocity14d!.tasksPerDay === 1, '14d should be 1 task/day');
+  assert(Math.abs(velocity30d!.tasksPerDay - 0.67) < 0.01, '30d should be ~0.67 tasks/day');
 
   db.close();
 }
@@ -680,21 +680,21 @@ async function testFullProgressVisibilityFlow(): Promise<void> {
 
   // Verify all components
   assert(!!summary.tasks.progressBar, 'Should have progress bar');
-  assert(summary.tasks.progressBar.includes('75%'), 'Should show 75% complete (3/4)');
+  assert(summary.tasks.progressBar!.includes('75%'), 'Should show 75% complete (3/4)');
 
   assert(!!summary.milestones, 'Should have milestones');
-  assert(summary.milestones.length === 2, 'Should have 2 milestones');
+  assert(summary.milestones!.length === 2, 'Should have 2 milestones');
 
-  const m1 = summary.milestones.find(m => m.id === 'M1');
+  const m1 = summary.milestones!.find(m => m.id === 'M1');
   assert(m1!.isComplete === true, 'Foundation milestone should be complete');
 
-  const m2 = summary.milestones.find(m => m.id === 'M2');
+  const m2 = summary.milestones!.find(m => m.id === 'M2');
   assert(m2!.percentComplete === 50, 'Features milestone should be 50% complete');
 
   assert(!!summary.velocity, 'Should have velocity data');
-  assert(summary.velocity.length === 3, 'Should have 3 velocity periods');
+  assert(summary.velocity!.length === 3, 'Should have 3 velocity periods');
 
-  const velocity7d = summary.velocity.find(v => v.period === '7d');
+  const velocity7d = summary.velocity!.find(v => v.period === '7d');
   assert(velocity7d!.tasksCompleted === 3, 'Should have 3 completed tasks in 7d');
   assert(['improving', 'stable', 'declining', 'insufficient_data'].includes(velocity7d!.trend), 'Should have valid trend');
 

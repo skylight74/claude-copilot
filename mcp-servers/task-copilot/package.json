@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "build:test": "tsc -p tsconfig.test.json",
+    "build:test": "npm run build && tsc -p tsconfig.test.json",
     "lint": "tsc --noEmit",
     "start": "node dist/index.js",
     "dev": "tsc -w",

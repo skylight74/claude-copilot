@@ -5,13 +5,22 @@
  * Provides detailed error messages and type-safe validation.
  */
 
-import AjvModule, { type ValidateFunction, type ErrorObject } from 'ajv';
+import AjvModule, { type ValidateFunction, type ErrorObject, type Options } from 'ajv';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { IterationConfig } from '../types.js';
 import type { IterationValidationRule } from './iteration-types.js';
 
-const Ajv = AjvModule.default || AjvModule;
+// Handle ESM/CJS compatibility for Ajv
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AjvConstructor = ((AjvModule as any).default ?? AjvModule) as new (options: Options) => AjvInstance;
+
+// Type for Ajv instance
+interface AjvInstance {
+  compile(schema: object): ValidateFunction;
+  addFormat(name: string, format: object): void;
+  errorsText(errors: ErrorObject[] | null | undefined): string;
+}
 
 // ============================================================================
 // TYPES
@@ -49,10 +58,10 @@ export interface ValidationOutput {
 
 export class IterationConfigValidator {
   private validate: ValidateFunction;
-  private ajv: InstanceType<typeof Ajv>;
+  private ajv: AjvInstance;
 
   constructor() {
-    this.ajv = new Ajv({
+    this.ajv = new AjvConstructor({
       allErrors: true,
       verbose: true,
       strict: true,
