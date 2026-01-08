@@ -32,7 +32,7 @@ const projectRoot = "/absolute/path/to/project";
 const projectName = path.basename(projectRoot);
 ```
 
-Calculate workspace ID using same algorithm as Task Copilot (hash of project path). This is needed for the SQLite database path: `~/.claude/tasks/{workspace}/tasks.db`
+Calculate workspace ID using the project folder name (same as Task Copilot). This is needed for the SQLite database path: `~/.claude/tasks/{workspace}/tasks.db`
 
 ### Step 2: Prepare Output Directory
 
@@ -80,7 +80,6 @@ import sys
 import time
 import signal
 import sqlite3
-import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -173,6 +172,10 @@ class Orchestrator:
 
             streams = {}
             for stream_id, stream_name, stream_phase in rows:
+                # Default to parallel if stream phase not specified
+                if not stream_phase:
+                    stream_phase = "parallel"
+
                 # Determine worktree path
                 if stream_phase == "foundation" or stream_phase == "integration":
                     worktree = "."
@@ -570,7 +573,7 @@ if __name__ == "__main__":
 Replace placeholders:
 - `{projectRoot}` - Absolute path to project
 - `{projectName}` - Project name (basename of path)
-- `{workspaceId}` - Workspace ID (hash of project path, same algorithm as Task Copilot)
+- `{workspaceId}` - Workspace ID (project folder name, same as Task Copilot)
 
 ### Step 4: Generate check-streams
 
@@ -994,9 +997,9 @@ For detailed usage: python .claude/orchestrator/orchestrate.py --help
 
 Display current stream progress by querying Task Copilot directly.
 
-### Step 1: Calculate Workspace ID
+### Step 1: Get Workspace ID
 
-Use same algorithm as Task Copilot to hash project path and get workspace ID.
+Use the project folder name as the workspace ID (same as Task Copilot).
 
 ### Step 2: Query Task Copilot Database
 
@@ -1103,7 +1106,7 @@ Expected path: ~/.claude/tasks/{workspaceId}/tasks.db
 
 Possible causes:
 1. No tasks have been created yet (run /protocol)
-2. Workspace ID calculation mismatch
+2. Workspace ID mismatch (should be project folder name)
 3. Task Copilot not initialized
 
 Run /protocol to initialize task tracking.
@@ -1146,7 +1149,8 @@ Fix permissions: chmod u+w .claude/
 ## Implementation Notes
 
 - **No streams.json** - All data queried at runtime from Task Copilot
-- **Workspace ID** - Use same hashing algorithm as Task Copilot (hash of absolute project path)
+- **Workspace ID** - Use project folder name (same as Task Copilot)
+- **Null handling** - Default stream phase to "parallel" if not specified
 - **Database queries** - Query `metadata` JSON column for stream data
 - **Headless spawning** - Use critical command: `claude --print --dangerously-skip-permissions -p "prompt"`
 - **Process detachment** - Use `start_new_session=True` in `subprocess.Popen`

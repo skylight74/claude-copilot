@@ -61,7 +61,7 @@ Tasks must be organized into streams with metadata:
 
 - `streamId` - Unique identifier (e.g., "Stream-A")
 - `streamName` - Human-readable name (e.g., "foundation")
-- `streamPhase` - Execution phase: `"foundation"`, `"parallel"`, or `"integration"`
+- `streamPhase` - Execution phase: `"foundation"`, `"parallel"`, or `"integration"` (defaults to `"parallel"` if not specified)
 
 Work with `@agent-ta` to create a PRD with organized streams.
 
@@ -446,16 +446,16 @@ The worker loads stream context via `/continue` and works autonomously.
 
 ## Workspace and Database Paths
 
-### Workspace ID Calculation
+### Workspace ID
 
-Task Copilot uses a hash of the absolute project path:
+Task Copilot uses the project folder name as the workspace ID:
 
 ```python
-import hashlib
-workspace_id = hashlib.md5(project_path.encode()).hexdigest()[:16]
+from pathlib import Path
+workspace_id = Path(project_path).name  # e.g., "my-project"
 ```
 
-The orchestrator uses the **same algorithm** to find the database.
+The orchestrator uses the **same convention** to find the database.
 
 ### Database Path
 
@@ -466,7 +466,7 @@ The orchestrator uses the **same algorithm** to find the database.
 Example:
 
 ```
-~/.claude/tasks/a1b2c3d4e5f6g7h8/tasks.db
+~/.claude/tasks/my-project/tasks.db
 ```
 
 **If database not found:**
