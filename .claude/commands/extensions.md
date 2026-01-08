@@ -100,7 +100,7 @@ Set up global once, override per-project only when needed.
 
 ## Learn More
 
-See: docs/EXTENSION-SPEC.md for complete documentation on:
+See: docs/40-extensions/00-extension-spec.md for complete documentation on:
 - Creating knowledge repositories
 - Extension file formats
 - Fallback behaviors
@@ -188,7 +188,7 @@ Set up global once, override per-project only when needed.
 
 ## Learn More
 
-See: docs/EXTENSION-SPEC.md
+See: docs/40-extensions/00-extension-spec.md
 ```
 
 ### If warnings exist:

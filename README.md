@@ -37,7 +37,7 @@ It's not separate software—it's markdown files (agents, commands, project inst
 
 When Claude Code reads these instructions, it transforms from a generic assistant into a full development team that remembers your work.
 
-→ [Why we built this](docs/PHILOSOPHY.md)
+→ [Why we built this](docs/10-architecture/02-philosophy.md)
 
 ---
 
@@ -51,7 +51,7 @@ Solo developers are expected to be experts in everything. AI assistants help, bu
 
 Teams face the same challenges at scale—plus knowledge silos, inconsistent standards, and AI that amplifies inconsistency.
 
-→ [Read the full problem statement](docs/PHILOSOPHY.md#the-problems-we-solve)
+→ [Read the full problem statement](docs/10-architecture/02-philosophy.md#the-problems-we-solve)
 
 ---
 
@@ -139,7 +139,7 @@ Then run:
 /continue                            # Resume where you left off
 ```
 
-→ [Complete setup guide](docs/USER-JOURNEY.md)
+→ [Complete setup guide](docs/01-getting-started/01-user-journey.md)
 
 ---
 
@@ -211,7 +211,7 @@ Control depth with keywords:
 /continue Stream-A                # Resume previous work
 ```
 
-→ [Full usage guide with scenarios](docs/USAGE-GUIDE.md)
+→ [Full usage guide with scenarios](docs/70-reference/01-usage-guide.md)
 
 ---
 
@@ -242,7 +242,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 | `cw` | Copywriter | Microcopy, error messages, voice |
 | `kc` | Knowledge Copilot | Shared knowledge setup |
 
-→ [Meet your full team](docs/AGENTS.md)
+→ [Meet your full team](docs/10-architecture/01-agents.md)
 
 ---
 
@@ -265,7 +265,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 | **Team** | + shared knowledge, private skills via PostgreSQL |
 | **Enterprise** | + Skill Marketplace (25K+ skills), full customization |
 
-→ [Customization guide](docs/CUSTOMIZATION.md) | [Extension Spec](docs/EXTENSION-SPEC.md)
+→ [Customization guide](docs/20-configuration/02-customization.md) | [Extension Spec](docs/40-extensions/00-extension-spec.md)
 
 ---
 
@@ -288,30 +288,30 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 **Start here:**
 | Guide | Purpose |
 |-------|---------|
-| [Usage Guide](docs/USAGE-GUIDE.md) | **How to actually use this** - real workflows and scenarios |
-| [Decision Guide](docs/DECISION-GUIDE.md) | When to use what - quick reference matrices |
-| [Agents](docs/AGENTS.md) | All 12 specialists in detail |
+| [Usage Guide](docs/70-reference/01-usage-guide.md) | **How to actually use this** - real workflows and scenarios |
+| [Decision Guide](docs/10-architecture/03-decision-guide.md) | When to use what - quick reference matrices |
+| [Agents](docs/10-architecture/01-agents.md) | All 12 specialists in detail |
 
 **Setup & Configuration:**
 | Guide | Purpose |
 |-------|---------|
-| [User Journey](docs/USER-JOURNEY.md) | Complete setup walkthrough |
-| [Configuration](docs/CONFIGURATION.md) | .mcp.json, environment variables |
-| [Customization](docs/CUSTOMIZATION.md) | Extensions, knowledge repos, private skills |
+| [User Journey](docs/01-getting-started/01-user-journey.md) | Complete setup walkthrough |
+| [Configuration](docs/20-configuration/01-configuration.md) | .mcp.json, environment variables |
+| [Customization](docs/20-configuration/02-customization.md) | Extensions, knowledge repos, private skills |
 
 **Advanced:**
 | Guide | Purpose |
 |-------|---------|
-| [Enhancement Features](docs/ENHANCEMENT-FEATURES.md) | Verification, auto-commit, preflight, worktrees |
-| [Extension Spec](docs/EXTENSION-SPEC.md) | Creating extensions |
-| [Architecture](docs/ARCHITECTURE.md) | Technical deep dive |
-| [Philosophy](docs/PHILOSOPHY.md) | Why we built it this way |
+| [Enhancement Features](docs/50-features/00-enhancement-features.md) | Verification, auto-commit, preflight, worktrees |
+| [Extension Spec](docs/40-extensions/00-extension-spec.md) | Creating extensions |
+| [Architecture](docs/10-architecture/00-overview.md) | Technical deep dive |
+| [Philosophy](docs/10-architecture/02-philosophy.md) | Why we built it this way |
 
 **Operations:**
 | Document | Purpose |
 |----------|---------|
-| [Working Protocol](docs/operations/working-protocol.md) | Agent-First Protocol details |
-| [Documentation Guide](docs/operations/documentation-guide.md) | Doc standards, token budgets |
+| [Working Protocol](docs/30-operations/01-working-protocol.md) | Agent-First Protocol details |
+| [Documentation Guide](docs/30-operations/02-documentation-guide.md) | Doc standards, token budgets |
 
 ---
 

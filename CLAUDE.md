@@ -84,7 +84,7 @@ Ask yourself:
 
 ## Quick Decision Guide
 
-*Note: For comprehensive decision matrices and flowcharts, see [docs/DECISION-GUIDE.md](docs/DECISION-GUIDE.md). The tables below provide quick reference for common scenarios.*
+*Note: For comprehensive decision matrices and flowcharts, see [docs/10-architecture/03-decision-guide.md](docs/10-architecture/03-decision-guide.md). The tables below provide quick reference for common scenarios.*
 
 ### Feature Comparison
 
@@ -353,9 +353,9 @@ Streams are automatically archived when switching initiatives via `initiative_li
 - **Validation System**: Validates work products for size limits, required structure, completeness before storage
 - **Token Efficiency**: Validation enforces character/token limits to prevent context bloat (warn/reject modes)
 - **Independent Streams**: Parallel work streams with file conflict detection and dependency management (foundation → parallel → integration)
-- **Verification Enforcement**: Opt-in blocking of task completion without acceptance criteria and proof (`metadata.verificationRequired: true`)
+- **Verification Enforcement**: Opt-in blocking of task completion without acceptance criteria and proof (set `metadata.verificationRequired: true`)
 - **Activation Modes**: Auto-detected from keywords (ultrawork, analyze, quick, thorough); ultrawork warns when >3 subtasks
-- **Progress Visibility**: ASCII progress bars, milestone tracking in PRDs, velocity trends (improving/stable/declining)
+- **Progress Visibility**: ASCII progress bars, milestone tracking in PRDs, velocity trends (7d/14d/30d with ↗↘→ indicators)
 
 ### 5. Protocol
 
@@ -371,8 +371,8 @@ Commands enforcing battle-tested workflows.
 | `/update-copilot` | User | Update Claude Copilot itself (pull + rebuild) |
 | `/knowledge-copilot` | User | Build or link shared knowledge repository |
 | `/protocol [task]` | Project | Start fresh work with Agent-First Protocol |
-| `/continue [stream]` | Project | Resume previous work via Memory Copilot |
-| `/pause [reason]` | Project | Create named checkpoint for context switching |
+| `/continue [stream]` | Project | Resume previous work (checks pause checkpoints first, then Memory Copilot) |
+| `/pause [reason]` | Project | Create named checkpoint with extended expiry for context switching |
 | `/map` | Project | Generate PROJECT_MAP.md with codebase analysis |
 | `/memory` | Project | View current memory state and recent activity |
 
@@ -514,7 +514,7 @@ Only needed when a project requires different extensions than global:
 
 ### Documentation
 
-See [EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for full documentation on:
+See [extension-spec.md](docs/40-extensions/00-extension-spec.md) for full documentation on:
 - Creating knowledge repositories
 - Extension file formats
 - Fallback behaviors
@@ -529,10 +529,10 @@ See [EXTENSION-SPEC.md](docs/EXTENSION-SPEC.md) for full documentation on:
 | Agents | `.claude/agents/` |
 | Commands | `.claude/commands/` |
 | MCP Servers | `mcp-servers/` |
-| Decision matrices | `docs/DECISION-GUIDE.md` |
-| Operations docs | `docs/operations/` |
+| Decision matrices | `docs/10-architecture/03-decision-guide.md` |
+| Operations docs | `docs/30-operations/` |
 | Templates | `templates/` |
-| Extension spec | `docs/EXTENSION-SPEC.md` |
+| Extension spec | `docs/40-extensions/00-extension-spec.md` |
 
 ---
 
@@ -615,12 +615,12 @@ Every agent must include:
 
 ## Operations Documentation
 
-Standards and guides in `docs/operations/`:
+Standards and guides in `docs/30-operations/`:
 
 | Document | Purpose |
 |----------|---------|
-| `working-protocol.md` | Agent-First Protocol details |
-| `documentation-guide.md` | Doc standards, token budgets |
+| `01-working-protocol.md` | Agent-First Protocol details |
+| `02-documentation-guide.md` | Doc standards, token budgets |
 
 ---
 

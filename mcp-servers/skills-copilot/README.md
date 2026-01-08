@@ -264,7 +264,7 @@ Returns:
 }
 ```
 
-See [EXTENSION-SPEC.md](/docs/EXTENSION-SPEC.md) for full documentation on creating knowledge repositories.
+See [extension-spec.md](/docs/40-extensions/00-extension-spec.md) for full documentation on creating knowledge repositories.
 
 ## Skills Registry (CLAUDE.md)
 
