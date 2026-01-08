@@ -2,7 +2,7 @@
  * HTTP REST API Server for Task Copilot
  *
  * Lightweight HTTP API for external tools (e.g., Python orchestration scripts)
- * to query task and stream state.
+ * to query task and stream state. Includes WebSocket support for real-time events.
  */
 
 import Fastify from 'fastify';
@@ -11,6 +11,7 @@ import { streamsRoutes } from './http-routes/streams.js';
 import { tasksRoutes } from './http-routes/tasks.js';
 import { activityRoutes } from './http-routes/activity.js';
 import { checkpointsRoutes } from './http-routes/checkpoints.js';
+import { TaskCopilotWebSocketServer } from './events/websocket-server.js';
 
 export interface HttpServerConfig {
   host?: string;
@@ -41,6 +42,11 @@ export async function createHttpServer(config: HttpServerConfig) {
   try {
     await fastify.listen({ host, port });
     console.error(`HTTP API listening on http://${host}:${port}`);
+
+    // Initialize WebSocket server after HTTP server starts
+    const httpServer = fastify.server;
+    new TaskCopilotWebSocketServer(httpServer);
+    // Note: WebSocket server lifecycle is tied to HTTP server
   } catch (err) {
     fastify.log.error(err);
     throw err;

@@ -570,4 +570,157 @@ export class WorktreeManager {
       throw new Error(`Failed to list task worktrees: ${error}`);
     }
   }
+
+  /**
+   * Analyze a conflict to determine its type and suggest resolution strategy
+   *
+   * @param file - File path with conflict
+   * @returns Conflict details including type and suggested strategy
+   */
+  async analyzeConflict(file: string): Promise<{
+    file: string;
+    type: 'content' | 'rename' | 'delete' | 'add-add' | 'modify-delete';
+    hasConflictMarkers: boolean;
+    suggestedStrategy: 'ours' | 'theirs' | 'manual';
+  }> {
+    if (!(await this.isGitRepo())) {
+      throw new Error('Not a git repository');
+    }
+
+    try {
+      // Get conflict status from git
+      const { stdout: statusOutput } = await execAsync(
+        `git status --porcelain "${file}"`,
+        { cwd: this.projectRoot }
+      );
+
+      const status = statusOutput.trim();
+
+      // Determine conflict type from status code
+      let type: 'content' | 'rename' | 'delete' | 'add-add' | 'modify-delete';
+      let suggestedStrategy: 'ours' | 'theirs' | 'manual' = 'manual';
+
+      if (status.startsWith('DD')) {
+        type = 'delete';
+        suggestedStrategy = 'manual'; // Both deleted - needs human decision
+      } else if (status.startsWith('AU') || status.startsWith('UA')) {
+        type = 'add-add';
+        suggestedStrategy = 'manual'; // Added by both - needs merge
+      } else if (status.startsWith('DU') || status.startsWith('UD')) {
+        type = 'modify-delete';
+        suggestedStrategy = 'manual'; // Deleted vs modified - needs decision
+      } else if (status.includes('R')) {
+        type = 'rename';
+        suggestedStrategy = 'manual'; // Rename conflict
+      } else {
+        type = 'content';
+        suggestedStrategy = 'manual'; // Content conflict - default to manual
+      }
+
+      // Check for conflict markers in file
+      let hasConflictMarkers = false;
+      try {
+        const { stdout: grepOutput } = await execAsync(
+          `grep -q "^<<<<<<< " "${file}" && echo "found" || echo "not found"`,
+          { cwd: this.projectRoot }
+        );
+        hasConflictMarkers = grepOutput.trim() === 'found';
+      } catch {
+        // If grep fails, assume no markers
+        hasConflictMarkers = false;
+      }
+
+      return {
+        file,
+        type,
+        hasConflictMarkers,
+        suggestedStrategy
+      };
+    } catch (error) {
+      // Default fallback
+      return {
+        file,
+        type: 'content',
+        hasConflictMarkers: true,
+        suggestedStrategy: 'manual'
+      };
+    }
+  }
+
+  /**
+   * Check which files still have conflict markers
+   *
+   * @param files - Files to check
+   * @returns Array of files that still have conflict markers
+   */
+  async hasConflictMarkers(files: string[]): Promise<string[]> {
+    if (!(await this.isGitRepo())) {
+      return [];
+    }
+
+    const filesWithMarkers: string[] = [];
+
+    for (const file of files) {
+      try {
+        const { stdout } = await execAsync(
+          `grep -l "^<<<<<<< " "${file}" || true`,
+          { cwd: this.projectRoot }
+        );
+
+        if (stdout.trim()) {
+          filesWithMarkers.push(file);
+        }
+      } catch {
+        // If grep fails, file might not exist or be accessible
+        continue;
+      }
+    }
+
+    return filesWithMarkers;
+  }
+
+  /**
+   * Mark a conflict as resolved (stage the file)
+   *
+   * @param file - File path to mark as resolved
+   */
+  async markConflictResolved(file: string): Promise<void> {
+    if (!(await this.isGitRepo())) {
+      throw new Error('Not a git repository');
+    }
+
+    try {
+      await execAsync(`git add "${file}"`, { cwd: this.projectRoot });
+    } catch (error) {
+      throw new Error(`Failed to mark ${file} as resolved: ${error}`);
+    }
+  }
+
+  /**
+   * Resolve a conflict using a specific strategy
+   *
+   * @param file - File path with conflict
+   * @param strategy - Resolution strategy ('ours' or 'theirs')
+   */
+  async resolveConflictWithStrategy(
+    file: string,
+    strategy: 'ours' | 'theirs'
+  ): Promise<void> {
+    if (!(await this.isGitRepo())) {
+      throw new Error('Not a git repository');
+    }
+
+    try {
+      // Use git checkout to resolve conflict
+      await execAsync(
+        `git checkout --${strategy} "${file}"`,
+        { cwd: this.projectRoot }
+      );
+
+      // Stage the resolved file
+      await execAsync(`git add "${file}"`, { cwd: this.projectRoot });
+    } catch (error) {
+      throw new Error(`Failed to resolve ${file} with strategy '${strategy}': ${error}`);
+    }
+  }
 }

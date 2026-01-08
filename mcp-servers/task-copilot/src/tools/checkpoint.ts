@@ -21,6 +21,7 @@ import type {
   TaskStatus,
   WorkProductType,
 } from '../types.js';
+import { eventBus } from '../events/event-bus.js';
 
 const MAX_CHECKPOINTS_PER_TASK = 5;
 const DEFAULT_EXPIRY_MINUTES = 24 * 60; // 24 hours
@@ -137,6 +138,20 @@ export function checkpointCreate(
   if (count > MAX_CHECKPOINTS_PER_TASK) {
     db.deleteOldestCheckpoints(input.taskId, count - MAX_CHECKPOINTS_PER_TASK);
   }
+
+  // Emit checkpoint created event
+  eventBus.emitCheckpointCreated(input.taskId, {
+    checkpointId: id,
+    taskId: input.taskId,
+    taskTitle: task.title,
+    sequence,
+    trigger: trigger as string,
+    executionPhase: input.executionPhase,
+    executionStep: input.executionStep,
+    hasDraft: !!draftContent,
+    expiresAt,
+    createdAt: now,
+  });
 
   return {
     id,
@@ -272,6 +287,15 @@ export function checkpointResume(
       estimatedResumeTime: agentContext.estimatedResumeTime as string | undefined
     };
   }
+
+  // Emit checkpoint resumed event
+  eventBus.emitCheckpointResumed(input.taskId, {
+    checkpointId: checkpoint.id,
+    taskId: input.taskId,
+    taskTitle: task.title,
+    sequence: checkpoint.sequence,
+    resumedAt: new Date().toISOString(),
+  });
 
   return {
     taskId: input.taskId,

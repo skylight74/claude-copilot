@@ -21,8 +21,9 @@ import { detectActivationMode, isValidActivationMode } from '../utils/mode-detec
 import { executeQualityGates, shouldEnforceQualityGates } from './quality-gates.js';
 import { requiresVerification, validateTaskCompletion } from '../validation/verification-rules.js';
 import { validateActivationMode, shouldValidateActivationMode } from '../validation/activation-mode-rules.js';
-import { GitHelper } from '../utils/git-helper.js';
 import { WorktreeManager } from '../utils/worktree-manager.js';
+import { eventBus } from '../events/event-bus.js';
+import type { TaskChange } from '../events/types.js';
 
 export async function taskCreate(
   db: DatabaseClient,
@@ -173,6 +174,15 @@ export async function taskCreate(
     }
   }
 
+  // Emit task created event
+  eventBus.emitTaskCreated(id, {
+    taskId: id,
+    taskTitle: input.title,
+    assignedAgent: input.assignedAgent,
+    streamId: metadata.streamId as string | undefined,
+    createdAt: now,
+  });
+
   return {
     id,
     prdId: input.prdId,
@@ -186,7 +196,13 @@ export async function taskCreate(
 export async function taskUpdate(
   db: DatabaseClient,
   input: TaskUpdateInput
-): Promise<{ id: string; status: TaskStatus; updatedAt: string } | null> {
+): Promise<{
+  id: string;
+  status: TaskStatus;
+  updatedAt: string;
+  autoCommitRequested?: boolean;
+  suggestedCommitMessage?: string;
+} | null> {
   const task = db.getTask(input.id);
   if (!task) return null;
 
@@ -292,6 +308,36 @@ export async function taskUpdate(
 
   db.updateTask(input.id, updates);
 
+  // Get updated task for event emission
+  const updatedTask = db.getTask(input.id);
+  const updatedMetadata = updatedTask ? JSON.parse(updatedTask.metadata) as TaskMetadata : undefined;
+
+  // Calculate changes for event
+  const changes: TaskChange[] = [];
+  if (input.status !== undefined && input.status !== task.status) {
+    changes.push({ field: 'status', oldValue: task.status, newValue: input.status });
+  }
+  if (input.assignedAgent !== undefined && input.assignedAgent !== task.assigned_agent) {
+    changes.push({ field: 'assignedAgent', oldValue: task.assigned_agent, newValue: input.assignedAgent });
+  }
+  if (input.notes !== undefined && input.notes !== task.notes) {
+    changes.push({ field: 'notes', oldValue: task.notes, newValue: input.notes });
+  }
+  if (input.blockedReason !== undefined && input.blockedReason !== task.blocked_reason) {
+    changes.push({ field: 'blockedReason', oldValue: task.blocked_reason, newValue: input.blockedReason });
+  }
+
+  // Emit task updated event
+  eventBus.emitTaskUpdated(input.id, {
+    taskId: input.id,
+    taskTitle: task.title,
+    status: (input.status || task.status) as TaskStatus,
+    assignedAgent: input.assignedAgent || task.assigned_agent || undefined,
+    streamId: updatedMetadata?.streamId,
+    changes,
+    updatedAt: now,
+  });
+
   // Record performance on agent reassignment
   if (isReassignment && previousAgent) {
     recordPerformance(db, task, 'reassigned', now);
@@ -299,6 +345,31 @@ export async function taskUpdate(
 
   // Handle status changes
   if (input.status && input.status !== task.status) {
+    // Emit status changed event
+    eventBus.emitTaskStatusChanged(input.id, {
+      taskId: input.id,
+      taskTitle: task.title,
+      oldStatus: task.status as TaskStatus,
+      newStatus: input.status,
+      statusChangedAt: now,
+    });
+
+    // Emit specific status events
+    if (input.status === 'blocked') {
+      eventBus.emitTaskBlocked(input.id, {
+        taskId: input.id,
+        taskTitle: task.title,
+        blockedReason: input.blockedReason || 'Unknown',
+        blockedAt: now,
+      });
+    } else if (input.status === 'completed') {
+      eventBus.emitTaskCompleted(input.id, {
+        taskId: input.id,
+        taskTitle: task.title,
+        completedAt: now,
+      });
+    }
+
     // Log activity
     if (task.prd_id) {
       const prd = db.getPrd(task.prd_id);
@@ -357,14 +428,29 @@ export async function taskUpdate(
       recordPerformance(db, task, 'failure', now);
     }
 
-    // Auto-commit on task completion
-    if (input.status === 'completed') {
-      await handleAutoCommit(db, task, input.id);
-    }
-
     // Auto-checkpoint on status transitions to in_progress or blocked
     if (input.status === 'in_progress' || input.status === 'blocked') {
       createAutoCheckpoint(db, task, input.status === 'blocked' ? input.blockedReason : undefined, now);
+    }
+
+    // Recalculate and emit stream progress if task is in a stream
+    if (updatedMetadata?.streamId) {
+      emitStreamProgressIfNeeded(db, updatedMetadata.streamId);
+    }
+  }
+
+  // Check if auto-commit is requested on completion
+  let autoCommitRequested = false;
+  let suggestedCommitMessage: string | undefined;
+
+  if (input.status === 'completed' && task.status !== 'completed') {
+    // Task is transitioning TO completed (not already completed)
+    const updatedMetadata = JSON.parse(updates.metadata || task.metadata) as TaskMetadata;
+
+    // Check if autoCommitOnComplete is enabled
+    if (updatedMetadata.autoCommitOnComplete === true) {
+      autoCommitRequested = true;
+      suggestedCommitMessage = `feat(${input.id}): ${task.title}`;
     }
   }
 
@@ -372,7 +458,11 @@ export async function taskUpdate(
     id: input.id,
     status: (input.status || task.status) as TaskStatus,
     updatedAt: now,
-    ...(activationModeWarning && { activationModeWarning })
+    ...(activationModeWarning && { activationModeWarning }),
+    ...(autoCommitRequested && {
+      autoCommitRequested,
+      suggestedCommitMessage
+    })
   };
 }
 
@@ -471,68 +561,6 @@ function createAutoCheckpoint(
   const count = db.getCheckpointCount(task.id);
   if (count > MAX_CHECKPOINTS) {
     db.deleteOldestCheckpoints(task.id, count - MAX_CHECKPOINTS);
-  }
-}
-
-/**
- * Handle auto-commit on task completion
- *
- * Creates a git commit for completed tasks if:
- * - autoCommit is true (default)
- * - filesModified array exists and has files
- * - Git is available and working directory is a git repo
- *
- * All errors are handled gracefully - never throws.
- */
-async function handleAutoCommit(
-  db: DatabaseClient,
-  task: TaskRow,
-  taskId: string
-): Promise<void> {
-  // Get task metadata
-  const metadata = JSON.parse(task.metadata) as TaskMetadata;
-
-  // Check if autoCommit is enabled (default: true)
-  const autoCommitEnabled = metadata.autoCommit !== false;
-
-  if (!autoCommitEnabled) {
-    // Auto-commit explicitly disabled
-    return;
-  }
-
-  // Check if filesModified exists and has files
-  const filesModified = metadata.filesModified;
-  if (!filesModified || !Array.isArray(filesModified) || filesModified.length === 0) {
-    // No files to commit
-    return;
-  }
-
-  // Get work product IDs for commit body
-  const workProducts = db.listWorkProducts(taskId);
-  const workProductIds = workProducts.map(wp => wp.id);
-
-  // Initialize GitHelper
-  const projectRoot = process.cwd();
-  const gitHelper = new GitHelper(projectRoot);
-
-  // Attempt auto-commit
-  const result = await gitHelper.autoCommitTask(
-    taskId,
-    task.title,
-    filesModified,
-    workProductIds
-  );
-
-  // Log result (success or warning) to task notes
-  if (result.success) {
-    const commitNote = `\n\nAuto-commit: ${result.commitHash || 'success'}${result.warning ? ` (${result.warning})` : ''}`;
-    const updatedNotes = (task.notes || '') + commitNote;
-    db.updateTask(taskId, { notes: updatedNotes });
-  } else if (result.warning) {
-    // Log warning but don't fail the task
-    const warningNote = `\n\nAuto-commit skipped: ${result.warning}`;
-    const updatedNotes = (task.notes || '') + warningNote;
-    db.updateTask(taskId, { notes: updatedNotes });
   }
 }
 
@@ -692,4 +720,74 @@ export function taskList(
       hasWorkProducts
     };
   });
+}
+
+/**
+ * Helper function to recalculate and emit stream progress event
+ */
+function emitStreamProgressIfNeeded(db: DatabaseClient, streamId: string | undefined): void {
+  if (!streamId) return;
+
+  // Get all tasks for this stream
+  const sql = `
+    SELECT id, status, metadata
+    FROM tasks
+    WHERE json_extract(metadata, '$.streamId') = ?
+      AND archived = 0
+  `;
+  const streamTasks = db.getDb().prepare(sql).all(streamId) as Array<{
+    id: string;
+    status: TaskStatus;
+    metadata: string;
+  }>;
+
+  if (streamTasks.length === 0) return;
+
+  // Calculate stream progress
+  const totalTasks = streamTasks.length;
+  const completedTasks = streamTasks.filter(t => t.status === 'completed').length;
+  const inProgressTasks = streamTasks.filter(t => t.status === 'in_progress').length;
+  const blockedTasks = streamTasks.filter(t => t.status === 'blocked').length;
+  const progressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+  // Get stream name from first task
+  const firstTaskMetadata = JSON.parse(streamTasks[0].metadata) as TaskMetadata;
+  const streamName = firstTaskMetadata.streamName || streamId;
+
+  // Emit stream progress event
+  eventBus.emitStreamProgress(streamId, {
+    streamId,
+    streamName,
+    totalTasks,
+    completedTasks,
+    inProgressTasks,
+    blockedTasks,
+    progressPercentage,
+    lastUpdated: new Date().toISOString(),
+  });
+
+  // Check if stream is completed
+  if (completedTasks === totalTasks && totalTasks > 0) {
+    eventBus.emitStreamCompleted(streamId, {
+      streamId,
+      streamName,
+      totalTasks,
+      completedAt: new Date().toISOString(),
+      duration: 0, // Could calculate if we tracked stream start time
+    });
+  }
+
+  // Check if stream is blocked
+  if (blockedTasks > 0) {
+    const blockedTaskIds = streamTasks
+      .filter(t => t.status === 'blocked')
+      .map(t => t.id);
+
+    eventBus.emitStreamBlocked(streamId, {
+      streamId,
+      streamName,
+      blockedReason: `${blockedTasks} task(s) blocked`,
+      blockedTaskIds,
+    });
+  }
 }
