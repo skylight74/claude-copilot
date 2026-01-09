@@ -29,9 +29,13 @@ It's not separate software—it's markdown files (agents, commands, project inst
 | You Get | What It Does |
 |---------|--------------|
 | **Persistent Memory** | Decisions, lessons, and progress survive across sessions |
-| **12 Specialist Agents** | Expert guidance for architecture, security, UX, and more |
+| **13 Specialist Agents** | Expert guidance for architecture, security, UX, creative, and more |
+| **Parallel Orchestration** | Headless workers execute streams concurrently with `/orchestrate` |
+| **Pause & Resume** | Context switch mid-task with `/pause`, return with `/continue` |
 | **Task Management** | PRDs, tasks, and work products with minimal context usage |
+| **Stream Management** | Parallel work streams with conflict detection and dependencies |
 | **Knowledge Search** | Your company docs, available in every project |
+| **Extensions System** | Override or extend agents with your company methodologies |
 | **Skills on Demand** | 25K+ patterns and best practices, loaded when needed |
 | **Context Engineering** | Auto-compaction, continuation enforcement, activation modes |
 
@@ -81,10 +85,13 @@ Teams face the same challenges at scale—plus knowledge silos, inconsistent sta
 │   │Architect│ │Engineer │ │   QA    │ │Security │ │  Docs   │ │ DevOps  │  │
 │   └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘  │
 │   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │
-│   │   sd    │ │   uxd   │ │  uids   │ │   uid   │ │   cw    │ │   kc    │  │
-│   │ Service │ │   UX    │ │   UI    │ │   UI    │ │  Copy   │ │Knowledge│  │
-│   │Designer │ │Designer │ │Designer │ │Developer│ │ Writer  │ │ Copilot │  │
+│   │   sd    │ │   uxd   │ │  uids   │ │   uid   │ │   cw    │ │   cco   │  │
+│   │ Service │ │   UX    │ │   UI    │ │   UI    │ │  Copy   │ │Creative │  │
+│   │Designer │ │Designer │ │Designer │ │Developer│ │ Writer  │ │  Chief  │  │
 │   └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘  │
+│                              ┌─────────┐                                    │
+│                              │   kc    │  Knowledge Copilot (utility)       │
+│                              └─────────┘                                    │
 └───────────────────────────────┼─────────────────────────────────────────────┘
                                 │
               ┌─────────────────┼─────────────────┐
@@ -240,6 +247,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 | `uids` | UI Designer | Visual design, design systems, tokens |
 | `uid` | UI Developer | Component implementation, responsive UI |
 | `cw` | Copywriter | Microcopy, error messages, voice |
+| `cco` | Creative Chief | Creative direction, brand strategy |
 | `kc` | Knowledge Copilot | Shared knowledge setup |
 
 → [Meet your full team](docs/10-architecture/01-agents.md)
@@ -251,10 +259,14 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `/protocol [task]` | Start work with Agent-First Protocol | `/protocol add dark mode` |
-| `/continue [stream]` | Resume from memory | `/continue Stream-B` |
+| `/continue [stream]` | Resume from memory or checkpoint | `/continue Stream-B` |
+| `/pause [reason]` | Create checkpoint for context switch | `/pause urgent bug` |
 | `/orchestrate` | Run parallel work streams | `/orchestrate start` |
+| `/map` | Generate project structure analysis | |
 | `/setup-project` | Initialize a new project | |
 | `/knowledge-copilot` | Build shared knowledge | |
+
+→ [Orchestration Guide](docs/50-features/01-orchestration-guide.md)
 
 ---
 
@@ -262,7 +274,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 | Level | What You Get |
 |-------|--------------|
-| **Solo** | 12 agents, persistent memory, local skills |
+| **Solo** | 13 agents, persistent memory, local skills |
 | **Team** | + shared knowledge, private skills via PostgreSQL |
 | **Enterprise** | + Skill Marketplace (25K+ skills), full customization |
 
@@ -291,7 +303,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 |-------|---------|
 | [Usage Guide](docs/70-reference/01-usage-guide.md) | **How to actually use this** - real workflows and scenarios |
 | [Decision Guide](docs/10-architecture/03-decision-guide.md) | When to use what - quick reference matrices |
-| [Agents](docs/10-architecture/01-agents.md) | All 12 specialists in detail |
+| [Agents](docs/10-architecture/01-agents.md) | All 13 specialists in detail |
 
 **Setup & Configuration:**
 | Guide | Purpose |
