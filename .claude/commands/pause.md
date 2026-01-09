@@ -62,7 +62,7 @@ for (const task of allTasks) {
       nextSteps: `Resume with /continue to restore work on: ${task.title}`,
       keyFiles: task.metadata?.files || []
     },
-    expiresIn: 10080 // Extended expiry: 7 days for manual checkpoints
+    expiresIn: 10080 // Extended expiry for manual checkpoints (minutes)
   });
 }
 ```
@@ -109,7 +109,7 @@ Pause checkpoints are identified by:
 - `trigger: 'manual'`
 - `executionPhase: 'paused'`
 - `agentContext.pausedBy: 'user'`
-- `expiresIn: 10080` (extended expiry)
+- `expiresIn: 10080` (extended expiry, minutes)
 
 This allows `/continue` to detect and prioritize pause checkpoints.
 
