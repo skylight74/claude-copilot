@@ -199,5 +199,5 @@ node dist/tools/session-guard.test.js
 ## Related Documentation
 
 - [CLAUDE.md](../../CLAUDE.md) - Main session guardrails
-- [docs/DECISION-GUIDE.md](../../docs/DECISION-GUIDE.md) - Agent selection matrix
-- [Task Copilot README](../README.md) - MCP server overview
+- [Decision Guide](../../docs/10-architecture/03-decision-guide.md) - Agent selection matrix
+- [Task Copilot README](./README.md) - MCP server overview

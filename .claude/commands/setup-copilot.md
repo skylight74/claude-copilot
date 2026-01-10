@@ -113,7 +113,7 @@ What you WON'T get:
 ✗ /protocol command - No Agent-First workflow
 
 You can upgrade to the full framework anytime.
-See docs/QUICK-START.md for details.
+See docs/00-overview.md for details.
 ```
 
 Then proceed to Step 3C-Minimal.
@@ -557,7 +557,7 @@ npm run build
 
 Then run this setup again.
 
-For detailed instructions, see: `docs/QUICK-START.md`
+For detailed instructions, see: `docs/00-overview.md`
 
 ---
 
@@ -674,7 +674,7 @@ This file provides guidance to Claude Code when working in this repository.
 
 This project uses Memory Copilot only - the minimal Claude Copilot configuration.
 
-**Full documentation:** `~/.claude/copilot/docs/QUICK-START.md`
+**Full documentation:** `~/.claude/copilot/docs/00-overview.md`
 
 ### What You Have
 
@@ -806,7 +806,7 @@ Run `/setup-copilot` again (without saying "minimal") to add:
 - Full documentation
 
 **Documentation:**
-- Quick start guide: `~/.claude/copilot/docs/QUICK-START.md`
+- Quick start guide: `~/.claude/copilot/docs/00-overview.md`
 - Full setup: `~/.claude/copilot/SETUP.md`
 
 ---

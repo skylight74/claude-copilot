@@ -92,6 +92,7 @@ export interface TaskMetadata extends Record<string, unknown> {
 
   // Auto-commit on completion (git checkpoint system)
   autoCommit?: boolean;        // If true (default), auto-commit on task completion
+  autoCommitOnComplete?: boolean; // If true, request auto-commit when task transitions to completed
   filesModified?: string[];    // File paths modified by this task (for staging)
 
   // Task isolation with git worktrees
@@ -314,6 +315,7 @@ export interface VelocityTrend {
   tasksCompleted: number;
   tasksPerDay: number;
   trend: 'improving' | 'stable' | 'declining' | 'insufficient_data';
+  trendIndicator: '↗' | '→' | '↘' | '?'; // Visual indicator for trend
 }
 
 export interface ProgressSummaryOutput {
@@ -847,6 +849,7 @@ export interface StreamConflictCheckOutput {
 export interface StreamUnarchiveInput {
   streamId: string;
   initiativeId?: string;
+  prdId?: string; // Optional: only unarchive tasks belonging to this PRD
 }
 
 export interface StreamUnarchiveOutput {
@@ -858,6 +861,7 @@ export interface StreamUnarchiveOutput {
 export interface StreamArchiveAllInput {
   confirm: boolean; // Safety flag - must be true to proceed
   initiativeId?: string; // Optional: only archive streams from specific initiative
+  prdId?: string; // Optional: only archive streams from specific PRD
 }
 
 export interface StreamArchiveAllOutput {
@@ -966,4 +970,45 @@ export interface ScopeChangeReviewInput {
 export interface ScopeChangeListInput {
   prdId?: string;
   status?: ScopeChangeRequestStatus;
+}
+
+// ============================================================================
+// AGENT ACTIVITY TYPES
+// ============================================================================
+
+export interface AgentActivityRow {
+  id: string;
+  stream_id: string;
+  agent_id: string;
+  task_id: string;
+  activity_description: string | null;
+  phase: string | null;
+  started_at: string;
+  last_heartbeat: string;
+  completed_at: string | null;
+}
+
+export interface AgentActivity {
+  streamId: string;
+  streamName: string;
+  agentId: string;
+  agentName: string;
+  taskId: string;
+  taskTitle: string;
+  activityDescription?: string;
+  phase?: string;
+  startedAt: string;
+  lastHeartbeat: string;
+  isActive: boolean;
+}
+
+export interface AgentActivityListInput {
+  streamId?: string;
+  activeOnly?: boolean;
+}
+
+export interface AgentActivityListOutput {
+  activities: AgentActivity[];
+  totalActive: number;
+  totalIdle: number;
 }

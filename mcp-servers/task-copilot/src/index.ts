@@ -35,6 +35,7 @@ import { preflightCheck } from './tools/preflight.js';
 import { worktreeConflictStatus, worktreeConflictResolve } from './tools/worktree.js';
 import { scopeChangeRequest, scopeChangeReview, scopeChangeList } from './tools/scope-change.js';
 import { getValidator, initValidator } from './validation/index.js';
+import { createHttpServer } from './http-server.js';
 import type {
   PrdCreateInput,
   PrdGetInput,
@@ -86,6 +87,8 @@ const PROJECT_PATH = process.cwd();
 const TASK_DB_PATH = process.env.TASK_DB_PATH || undefined;
 const WORKSPACE_ID = process.env.WORKSPACE_ID || undefined;
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const HTTP_API_HOST = process.env.HTTP_API_HOST || '127.0.0.1';
+const HTTP_API_PORT = parseInt(process.env.HTTP_API_PORT || '9090', 10);
 
 // Initialize database
 const db = new DatabaseClient(PROJECT_PATH, TASK_DB_PATH, WORKSPACE_ID);
@@ -696,24 +699,26 @@ const TOOLS = [
   },
   {
     name: 'stream_unarchive',
-    description: 'Unarchive a stream and link it to current or specified initiative. Use when you want to resume work on an archived stream.',
+    description: 'Unarchive a stream and link it to current or specified initiative. Use when you want to resume work on an archived stream. Optional prdId to scope unarchive to specific PRD.',
     inputSchema: {
       type: 'object',
       properties: {
         streamId: { type: 'string', description: 'Stream ID to unarchive (e.g., "Stream-A")' },
-        initiativeId: { type: 'string', description: 'Initiative ID to link stream to (default: current initiative)' }
+        initiativeId: { type: 'string', description: 'Initiative ID to link stream to (default: current initiative)' },
+        prdId: { type: 'string', description: 'Optional: only unarchive tasks belonging to this PRD' }
       },
       required: ['streamId']
     }
   },
   {
     name: 'stream_archive_all',
-    description: 'Archive all active streams. One-time cleanup for legacy data before auto-archive feature. Requires confirm: true for safety.',
+    description: 'Archive all active streams. One-time cleanup for legacy data before auto-archive feature. Requires confirm: true for safety. Optional prdId to scope archival to specific PRD.',
     inputSchema: {
       type: 'object',
       properties: {
         confirm: { type: 'boolean', description: 'Safety flag - must be true to proceed' },
-        initiativeId: { type: 'string', description: 'Optional: only archive streams from specific initiative' }
+        initiativeId: { type: 'string', description: 'Optional: only archive streams from specific initiative' },
+        prdId: { type: 'string', description: 'Optional: only archive streams from specific PRD (takes precedence over initiativeId)' }
       },
       required: ['confirm']
     }
@@ -1251,7 +1256,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'stream_unarchive': {
         const result = streamUnarchive(db, {
           streamId: a.streamId as string,
-          initiativeId: a.initiativeId as string | undefined
+          initiativeId: a.initiativeId as string | undefined,
+          prdId: a.prdId as string | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -1259,7 +1265,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'stream_archive_all': {
         const result = streamArchiveAll(db, {
           confirm: a.confirm as boolean,
-          initiativeId: a.initiativeId as string | undefined
+          initiativeId: a.initiativeId as string | undefined,
+          prdId: a.prdId as string | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -1349,11 +1356,24 @@ async function main() {
     console.error(`Cleaned up ${expiredCount} expired checkpoints`);
   }
 
+  // Start MCP server
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
   if (LOG_LEVEL === 'debug') {
     console.error('Task Copilot server running');
+  }
+
+  // Start HTTP API server
+  try {
+    await createHttpServer({
+      host: HTTP_API_HOST,
+      port: HTTP_API_PORT,
+      db
+    });
+  } catch (error) {
+    console.error('Failed to start HTTP API server:', error);
+    // Don't fail if HTTP server fails - MCP server should still work
   }
 }
 

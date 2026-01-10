@@ -12,13 +12,24 @@ export interface WorktreeConflictStatusInput {
 
 export interface WorktreeConflictResolveInput {
   taskId: string;
+  strategy?: 'ours' | 'theirs' | 'manual';
   targetBranch?: string;
+}
+
+export type ConflictType = 'content' | 'rename' | 'delete' | 'add-add' | 'modify-delete';
+
+export interface ConflictDetail {
+  file: string;
+  type: ConflictType;
+  hasConflictMarkers: boolean;
+  suggestedStrategy: 'ours' | 'theirs' | 'manual';
 }
 
 /**
  * Check conflict status for a task worktree
  *
- * Returns conflict state and list of conflicting files if any exist
+ * Returns detailed conflict information including type classification,
+ * conflict markers detection, and suggested resolution strategies.
  */
 export async function worktreeConflictStatus(
   db: DatabaseClient,
@@ -26,8 +37,9 @@ export async function worktreeConflictStatus(
 ): Promise<{
   taskId: string;
   hasConflicts: boolean;
-  conflicts: string[];
-  message: string;
+  conflicts: ConflictDetail[];
+  summary: string;
+  suggestedAction: string;
 } | null> {
   const task = db.getTask(input.taskId);
   if (!task) return null;
@@ -40,40 +52,79 @@ export async function worktreeConflictStatus(
       taskId: input.taskId,
       hasConflicts: false,
       conflicts: [],
-      message: 'Task does not use isolated worktree'
+      summary: 'Task does not use isolated worktree',
+      suggestedAction: 'No action needed'
     };
   }
 
-  // Check for conflicts in metadata (from previous merge attempt)
-  if (metadata.mergeConflicts && Array.isArray(metadata.mergeConflicts)) {
-    const projectRoot = process.cwd();
-    const worktreeManager = new WorktreeManager(projectRoot);
+  const projectRoot = process.cwd();
+  const worktreeManager = new WorktreeManager(projectRoot);
 
-    // Verify conflicts still exist
-    const currentConflicts = await worktreeManager.getConflictingFiles();
+  // Get current conflicting files
+  const currentConflicts = await worktreeManager.getConflictingFiles();
 
+  if (currentConflicts.length === 0) {
     return {
       taskId: input.taskId,
-      hasConflicts: currentConflicts.length > 0,
-      conflicts: currentConflicts,
-      message: currentConflicts.length > 0
-        ? `${currentConflicts.length} unresolved conflict(s)`
-        : 'All conflicts resolved'
+      hasConflicts: false,
+      conflicts: [],
+      summary: 'No conflicts detected',
+      suggestedAction: 'Ready to merge'
     };
+  }
+
+  // Analyze each conflict in detail
+  const conflictDetails: ConflictDetail[] = [];
+
+  for (const file of currentConflicts) {
+    const detail = await worktreeManager.analyzeConflict(file);
+    conflictDetails.push(detail);
+  }
+
+  // Generate summary and suggested action
+  const contentConflicts = conflictDetails.filter(c => c.type === 'content').length;
+  const deleteConflicts = conflictDetails.filter(c => c.type === 'delete' || c.type === 'modify-delete').length;
+  const renameConflicts = conflictDetails.filter(c => c.type === 'rename').length;
+  const addAddConflicts = conflictDetails.filter(c => c.type === 'add-add').length;
+
+  const summaryParts: string[] = [];
+  if (contentConflicts > 0) summaryParts.push(`${contentConflicts} content conflict(s)`);
+  if (deleteConflicts > 0) summaryParts.push(`${deleteConflicts} delete conflict(s)`);
+  if (renameConflicts > 0) summaryParts.push(`${renameConflicts} rename conflict(s)`);
+  if (addAddConflicts > 0) summaryParts.push(`${addAddConflicts} add-add conflict(s)`);
+
+  const summary = summaryParts.join(', ');
+
+  // Determine suggested action
+  const manualConflicts = conflictDetails.filter(c => c.suggestedStrategy === 'manual').length;
+  let suggestedAction: string;
+
+  if (manualConflicts === 0) {
+    suggestedAction = 'All conflicts can be auto-resolved. Use worktree_conflict_resolve with strategy: ours/theirs';
+  } else if (manualConflicts === conflictDetails.length) {
+    suggestedAction = 'All conflicts require manual resolution. Edit files to remove conflict markers, then use worktree_conflict_resolve';
+  } else {
+    suggestedAction = `${manualConflicts} conflict(s) require manual resolution. Resolve manually, then use worktree_conflict_resolve`;
   }
 
   return {
     taskId: input.taskId,
-    hasConflicts: false,
-    conflicts: [],
-    message: 'No conflicts detected'
+    hasConflicts: true,
+    conflicts: conflictDetails,
+    summary,
+    suggestedAction
   };
 }
 
 /**
- * Retry merge after manual conflict resolution
+ * Resolve merge conflicts using specified strategy
  *
- * Attempts to complete the merge after user has resolved conflicts manually.
+ * Supports three resolution strategies:
+ * - 'ours': Keep our changes (task branch)
+ * - 'theirs': Keep their changes (target branch)
+ * - 'manual': Verify conflicts are manually resolved
+ *
+ * After resolution, validates all conflicts are resolved before completing merge.
  * If successful, updates task status to completed and cleans up worktree.
  */
 export async function worktreeConflictResolve(
@@ -82,6 +133,7 @@ export async function worktreeConflictResolve(
 ): Promise<{
   success: boolean;
   completed: boolean;
+  resolvedFiles: string[];
   message: string;
 }> {
   const task = db.getTask(input.taskId);
@@ -105,54 +157,138 @@ export async function worktreeConflictResolve(
 
   const projectRoot = process.cwd();
   const worktreeManager = new WorktreeManager(projectRoot);
+  const strategy = input.strategy || 'manual';
 
-  // Check if conflicts are resolved
-  const hasConflicts = await worktreeManager.hasConflicts();
-  if (hasConflicts) {
-    const conflicts = await worktreeManager.getConflictingFiles();
+  // Get current conflicting files
+  const conflictingFiles = await worktreeManager.getConflictingFiles();
+
+  if (conflictingFiles.length === 0) {
+    // No conflicts, proceed directly to merge completion
+    return await completeMergeAfterResolution(
+      db,
+      worktreeManager,
+      task,
+      metadata,
+      input.targetBranch,
+      []
+    );
+  }
+
+  // Apply resolution strategy
+  const resolvedFiles: string[] = [];
+
+  if (strategy === 'manual') {
+    // Verify all conflicts are manually resolved (no conflict markers)
+    const stillHasMarkers = await worktreeManager.hasConflictMarkers(conflictingFiles);
+    if (stillHasMarkers.length > 0) {
+      return {
+        success: false,
+        completed: false,
+        resolvedFiles: [],
+        message: `Conflicts still exist in ${stillHasMarkers.length} file(s): ${stillHasMarkers.join(', ')}. Remove conflict markers before resolving.`
+      };
+    }
+
+    // Mark all files as resolved
+    for (const file of conflictingFiles) {
+      await worktreeManager.markConflictResolved(file);
+      resolvedFiles.push(file);
+    }
+  } else {
+    // Apply automatic resolution strategy (ours/theirs)
+    for (const file of conflictingFiles) {
+      try {
+        await worktreeManager.resolveConflictWithStrategy(file, strategy);
+        resolvedFiles.push(file);
+      } catch (error: any) {
+        return {
+          success: false,
+          completed: false,
+          resolvedFiles,
+          message: `Failed to resolve ${file} with strategy '${strategy}': ${error.message}`
+        };
+      }
+    }
+  }
+
+  // Verify all conflicts are now resolved
+  const remainingConflicts = await worktreeManager.getConflictingFiles();
+  if (remainingConflicts.length > 0) {
     return {
       success: false,
       completed: false,
-      message: `Conflicts still exist in ${conflicts.length} file(s): ${conflicts.join(', ')}`
+      resolvedFiles,
+      message: `Conflicts still exist in ${remainingConflicts.length} file(s): ${remainingConflicts.join(', ')}`
     };
   }
 
+  // All conflicts resolved, complete the merge
+  return await completeMergeAfterResolution(
+    db,
+    worktreeManager,
+    task,
+    metadata,
+    input.targetBranch,
+    resolvedFiles
+  );
+}
+
+/**
+ * Complete merge after all conflicts are resolved
+ */
+async function completeMergeAfterResolution(
+  db: DatabaseClient,
+  worktreeManager: WorktreeManager,
+  task: any,
+  metadata: TaskMetadata,
+  targetBranch: string | undefined,
+  resolvedFiles: string[]
+): Promise<{
+  success: boolean;
+  completed: boolean;
+  resolvedFiles: string[];
+  message: string;
+}> {
   try {
     // Conflicts resolved, retry merge
     const mergeResult = await worktreeManager.mergeTaskWorktree(
-      input.taskId,
-      input.targetBranch
+      task.id,
+      targetBranch
     );
 
     if (mergeResult.merged) {
       // Merge successful, cleanup worktree
-      await worktreeManager.cleanupTaskWorktree(input.taskId);
+      await worktreeManager.cleanupTaskWorktree(task.id);
 
       // Update task to completed
-      const cleanupNote = `\n\nConflicts resolved manually. Worktree merged and cleaned up: ${mergeResult.message}`;
+      const resolutionNote = resolvedFiles.length > 0
+        ? `\n\nConflicts resolved (${resolvedFiles.length} file(s)). Worktree merged and cleaned up: ${mergeResult.message}`
+        : `\n\nWorktree merged and cleaned up: ${mergeResult.message}`;
 
       // Remove conflict metadata
       const updatedMetadata = { ...metadata };
       delete updatedMetadata.mergeConflicts;
       delete updatedMetadata.mergeConflictTimestamp;
 
-      db.updateTask(input.taskId, {
+      db.updateTask(task.id, {
         status: 'completed',
         blocked_reason: null,
-        notes: task.notes ? `${task.notes}${cleanupNote}` : cleanupNote,
+        notes: task.notes ? `${task.notes}${resolutionNote}` : resolutionNote,
         metadata: JSON.stringify(updatedMetadata)
       });
 
       return {
         success: true,
         completed: true,
-        message: 'Merge successful. Task completed and worktree cleaned up.'
+        resolvedFiles,
+        message: `Merge successful. Resolved ${resolvedFiles.length} file(s). Task completed and worktree cleaned up.`
       };
     } else if (mergeResult.conflicts && mergeResult.conflicts.length > 0) {
       // New conflicts appeared
       return {
         success: false,
         completed: false,
+        resolvedFiles,
         message: `New conflicts detected: ${mergeResult.conflicts.join(', ')}`
       };
     } else {
@@ -160,6 +296,7 @@ export async function worktreeConflictResolve(
       return {
         success: false,
         completed: false,
+        resolvedFiles,
         message: 'Merge failed for unknown reason'
       };
     }
@@ -167,6 +304,7 @@ export async function worktreeConflictResolve(
     return {
       success: false,
       completed: false,
+      resolvedFiles,
       message: `Merge failed: ${error.message}`
     };
   }
