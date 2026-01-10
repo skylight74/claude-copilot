@@ -20,6 +20,10 @@
 
 ---
 
+> **This is a fork of [Claude Copilot](https://github.com/Everyone-Needs-A-Copilot/claude-copilot)** with additional features for multi-repo orchestration. See [Fork Additions](#fork-additions-orchestrator-worker-system) below.
+
+---
+
 ## What Is Claude Copilot?
 
 **Claude Copilot is a set of instructions that sit on top of Claude Code.** This is an independent, community-driven framework for Claude Code, unaffiliated with Microsoft Copilot or GitHub Copilot.
@@ -325,6 +329,78 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 |----------|---------|
 | [Working Protocol](docs/30-operations/01-working-protocol.md) | Agent-First Protocol details |
 | [Documentation Guide](docs/30-operations/02-documentation-guide.md) | Doc standards, token budgets |
+
+---
+
+## Fork Additions: Orchestrator-Worker System
+
+This fork adds a **human-in-the-loop orchestrator-worker pattern** for coordinating multiple Claude Code sessions across repos.
+
+### The Problem I Solved
+
+When working across multiple repos (backend, frontend, admin, infra), I needed:
+- A coordinator that tracks progress but doesn't touch code
+- Workers that focus on one task in isolation
+- Clean handoffs between sessions
+
+Claude Copilot gave me the memory and task infrastructure. I added the coordination layer.
+
+### What's Included
+
+**Orchestrator** (coordinates, never executes):
+- Tracks status across all repos
+- Assigns tasks to workers with slug-format names
+- Updates sprint boards and syncs with Notion
+- Strict role boundaries - cannot write code
+
+**Workers** (isolated execution):
+- Run in git worktrees (no branch conflicts)
+- Use git flow (`feature/` branches)
+- Report progress via memory
+- Strict start/progress/done/blocked commands
+
+**Makefile-based** - no Python dependencies:
+
+```bash
+make worker-new REPO=backend TASK=fix-migration
+```
+
+### Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│   ORCHESTRATOR  │     │     WORKER      │
+│   (main repo)   │     │   (worktree)    │
+├─────────────────┤     ├─────────────────┤
+│ • Track status  │────▶│ • feature/task  │
+│ • Assign tasks  │     │ • Write code    │
+│ • Update Notion │◀────│ • Report done   │
+│ • Never code    │     │ • Cleanup       │
+└─────────────────┘     └─────────────────┘
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| [`templates/Makefile.orchestrator`](templates/Makefile.orchestrator) | Orchestration commands |
+| [`.claude/commands/orchestrator.md`](.claude/commands/orchestrator.md) | Orchestrator behavior & boundaries |
+| [`.claude/commands/worker.md`](.claude/commands/worker.md) | Worker behavior & agent routing |
+| [`.claude/commands/worker-start.md`](.claude/commands/worker-start.md) | Strict startup protocol |
+| [`.claude/commands/worker-done.md`](.claude/commands/worker-done.md) | 3-step completion flow |
+| [`docs/ORCHESTRATOR-WORKER-FLOWCHART.md`](docs/ORCHESTRATOR-WORKER-FLOWCHART.md) | Full system diagram |
+
+### Design Decisions
+
+1. **Human-in-the-loop**: Workers don't spawn automatically. You control when to start.
+2. **Git flow native**: Every task is a feature branch, finished properly.
+3. **Worktree isolation**: Parallel workers without branch switching.
+4. **Role enforcement**: Orchestrator physically cannot write code (prompt-enforced).
+5. **Notion integration**: Sprint board updates as part of completion flow.
+
+### History
+
+Initial implementation: [January 6, 2025](https://github.com/skylight74/claude-copilot/commit/3825b87)
 
 ---
 
