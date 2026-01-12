@@ -28,7 +28,9 @@ import {
   initiativeGet,
   initiativeSlim,
   initiativeComplete,
-  initiativeToMarkdown
+  initiativeToMarkdown,
+  detectCorrections,
+  storeCorrection
 } from './tools/index.js';
 import { getInitiativeResource, getInitiativeSummary } from './resources/initiative-resource.js';
 import { getContextResource } from './resources/context-resource.js';
@@ -250,6 +252,22 @@ const TOOLS = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'correction_detect',
+    description: 'Auto-detect correction patterns in user messages. Returns matched patterns, confidence score, and extracted old/new values. Use for the two-stage correction workflow: auto-capture → manual review via /reflect.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        userMessage: { type: 'string', description: 'User message to analyze for correction patterns' },
+        previousAgentOutput: { type: 'string', description: 'Previous agent output (for context)' },
+        taskId: { type: 'string', description: 'Current task context' },
+        agentId: { type: 'string', description: 'Current agent context (me, ta, qa, etc.)' },
+        threshold: { type: 'number', description: 'Minimum confidence threshold 0-1 (default: 0.5)' },
+        autoStore: { type: 'boolean', description: 'Automatically store detected corrections (default: false)' }
+      },
+      required: ['userMessage']
+    }
   }
 ];
 
@@ -386,6 +404,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               projectId: db.getProjectId(),
               sessionId,
               ...stats
+            }, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_detect': {
+        const result = detectCorrections({
+          userMessage: a.userMessage as string,
+          previousAgentOutput: a.previousAgentOutput as string | undefined,
+          taskId: a.taskId as string | undefined,
+          agentId: a.agentId as string | undefined,
+          threshold: a.threshold as number | undefined
+        }, db.getProjectId());
+
+        // Auto-store if requested and corrections detected
+        if (a.autoStore && result.detected && result.corrections.length > 0) {
+          for (const correction of result.corrections) {
+            await storeCorrection(db, correction, sessionId);
+          }
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              detected: result.detected,
+              patternMatchCount: result.patternMatchCount,
+              maxConfidence: result.maxConfidence,
+              suggestedAction: result.suggestedAction,
+              corrections: result.corrections.map(c => ({
+                id: c.id,
+                originalContent: c.originalContent,
+                correctedContent: c.correctedContent,
+                target: c.target,
+                targetId: c.targetId,
+                confidence: c.confidence,
+                matchedPatterns: c.matchedPatterns.map(p => p.patternId),
+                status: c.status
+              }))
             }, null, 2)
           }]
         };
