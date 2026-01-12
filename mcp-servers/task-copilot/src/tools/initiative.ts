@@ -419,15 +419,37 @@ export function progressSummary(
   // Get work product stats
   const workProductsByType: Record<string, number> = {};
   let totalWorkProducts = 0;
+  const allWorkProducts: Array<{ type: string; confidence: number | null }> = [];
 
   for (const task of allTasks) {
     const workProducts = db.listWorkProducts(task.id);
-    totalWorkProducts += workProducts.length;
 
     for (const wp of workProducts) {
+      // Filter by minConfidence if specified
+      if (input.minConfidence !== undefined) {
+        if (wp.confidence === null || wp.confidence < input.minConfidence) {
+          continue; // Skip work products below confidence threshold
+        }
+      }
+
+      totalWorkProducts += 1;
       workProductsByType[wp.type] = (workProductsByType[wp.type] || 0) + 1;
+      allWorkProducts.push({ type: wp.type, confidence: wp.confidence });
     }
   }
+
+  // Calculate confidence stats
+  const confidenceValues = allWorkProducts
+    .map(wp => wp.confidence)
+    .filter((c): c is number => c !== null);
+
+  const confidenceStats = confidenceValues.length > 0 ? {
+    averageConfidence: confidenceValues.reduce((sum, c) => sum + c, 0) / confidenceValues.length,
+    highConfidence: confidenceValues.filter(c => c >= 0.8).length,
+    mediumConfidence: confidenceValues.filter(c => c >= 0.5 && c < 0.8).length,
+    lowConfidence: confidenceValues.filter(c => c < 0.5).length,
+    noConfidence: allWorkProducts.filter(wp => wp.confidence === null).length
+  } : undefined;
 
   // Calculate milestone progress from all active PRDs
   let allMilestones: MilestoneProgress[] = [];
@@ -474,7 +496,8 @@ export function progressSummary(
     },
     workProducts: {
       total: totalWorkProducts,
-      byType: workProductsByType
+      byType: workProductsByType,
+      confidenceStats
     },
     milestones: allMilestones.length > 0 ? allMilestones : undefined,
     velocity,

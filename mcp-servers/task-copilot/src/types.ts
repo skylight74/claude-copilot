@@ -177,6 +177,7 @@ export interface WorkProductRow {
   content: string;
   metadata: string;
   created_at: string;
+  confidence: number | null;
 }
 
 export interface ActivityLogRow {
@@ -245,6 +246,7 @@ export interface WorkProductStoreInput {
   title: string;
   content: string;
   metadata?: Record<string, unknown>;
+  confidence?: number; // 0-1 scale, optional
 }
 
 export interface WorkProductGetInput {
@@ -298,6 +300,7 @@ export interface InitiativeWipeOutput {
 
 export interface ProgressSummaryInput {
   initiativeId?: string;
+  minConfidence?: number; // Filter work products by minimum confidence (0-1)
 }
 
 export interface MilestoneProgress {
@@ -337,6 +340,13 @@ export interface ProgressSummaryOutput {
   workProducts: {
     total: number;
     byType: Record<string, number>;
+    confidenceStats?: {
+      averageConfidence: number;
+      highConfidence: number; // Count >= 0.8
+      mediumConfidence: number; // Count 0.5-0.79
+      lowConfidence: number; // Count < 0.5
+      noConfidence: number; // Count with null confidence
+    };
   };
   milestones?: MilestoneProgress[]; // Optional milestone progress
   velocity?: VelocityTrend[]; // Task completion velocity
@@ -418,7 +428,7 @@ export interface AgentPerformanceGetOutput {
 // CHECKPOINT TYPES
 // ============================================================================
 
-export type CheckpointTrigger = 'auto_status' | 'auto_subtask' | 'manual' | 'error';
+export type CheckpointTrigger = 'auto_status' | 'auto_subtask' | 'manual' | 'error' | 'auto_iteration' | 'auto_work_product';
 
 // ============================================================================
 // RALPH WIGGUM ITERATION TYPES
@@ -1011,4 +1021,29 @@ export interface AgentActivityListOutput {
   activities: AgentActivity[];
   totalActive: number;
   totalIdle: number;
+}
+
+// ============================================================================
+// PROTOCOL VIOLATION TYPES
+// ============================================================================
+
+export type ViolationType =
+  | 'files_read_exceeded'
+  | 'code_written_directly'
+  | 'plan_created_directly'
+  | 'generic_agent_used'
+  | 'response_tokens_exceeded'
+  | 'work_product_not_stored';
+
+export type ViolationSeverity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface ProtocolViolationRow {
+  id: string;
+  session_id: string;
+  initiative_id: string | null;
+  violation_type: ViolationType;
+  severity: ViolationSeverity;
+  context: string; // JSON
+  suggestion: string | null;
+  created_at: string;
 }

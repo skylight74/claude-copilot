@@ -10,6 +10,8 @@ owner: Claude Copilot
 status: active
 tags: [tokens, documentation, budget, validation, shared-docs]
 related_skills: [frontmatter-validation, link-validation]
+trigger_files: ["*.md", "**\/docs/**\/*.md", "**\/documentation/**\/*.md"]
+trigger_keywords: [token, budget, documentation, word-count, tokens, over-budget]
 ---
 
 # Token Budget Check

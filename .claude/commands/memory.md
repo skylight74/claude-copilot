@@ -26,6 +26,11 @@ Call these tools to gather memory state:
    progress_summary()
    ```
 
+5. **Get protocol violations (if Task Copilot is linked):**
+   ```
+   protocol_violations_get({ limit: 20 })
+   ```
+
 ## Step 2: Display Dashboard
 
 Format the output as a clean, scannable dashboard:
@@ -73,6 +78,18 @@ ta    | Output format     | [First 40 chars...]                 | 2025-01-14
 ### Task Progress (if Task Copilot linked)
 [Show output from progress_summary(), or skip section if not linked]
 PRDs: [count] | Tasks: [pending/in_progress/completed] | Work Products: [count]
+
+### Protocol Violations (if Task Copilot linked)
+[If protocol violations exist, show summary:]
+**Total:** [count] | **Critical:** [count] | **High:** [count] | **Medium:** [count] | **Low:** [count]
+
+[Table format for recent violations:]
+Type                     | Severity | Description                     | When
+------------------------ | -------- | ------------------------------- | ----------
+files_read_exceeded      | high     | Read 5 files (limit: 3)         | 2025-01-12
+generic_agent_used       | critical | Used "Explore" agent            | 2025-01-12
+
+[If no violations: "No protocol violations recorded"]
 ```
 
 ## Step 3: Handle Edge Cases
@@ -126,6 +143,11 @@ Consider running `initiative_slim({ archiveDetails: true })` to reduce context u
 - For agent improvements, parse metadata to extract AgentImprovementMetadata fields
 - Show status counts (pending/approved/rejected) from metadata.status field
 - Truncate rationale to 40 characters for table display
+- For protocol violations, show summary counts by severity
+- Only show violations section if Task Copilot is linked
+- Parse violation context JSON to extract description
+- Format violation dates in YYYY-MM-DD format
+- Highlight critical and high-severity violations
 
 ## Example Output
 
@@ -171,6 +193,14 @@ qa    | Output format     | Include regression test considerati... | 2025-01-14
 
 **Storage:** ~/.claude/memory/abc123def456/memory.db
 **Workspace ID:** abc123def456 (auto-generated)
+
+### Protocol Violations
+**Total:** 2 | **Critical:** 1 | **High:** 1 | **Medium:** 0 | **Low:** 0
+
+Type                     | Severity | Description                     | When
+------------------------ | -------- | ------------------------------- | ----------
+generic_agent_used       | critical | Used "Explore" agent            | 2025-01-15
+files_read_exceeded      | high     | Read 5 files (limit: 3)         | 2025-01-15
 ```
 
 ## Additional Information

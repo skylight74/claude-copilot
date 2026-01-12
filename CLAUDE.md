@@ -76,7 +76,7 @@ Ask yourself:
 |-----------|----------|-----------|
 | Lost memory, wasted tokens | Persistent memory + semantic search | **Memory Copilot** |
 | Generic AI lacks expertise | Specialized agents for complex tasks | **Agents** |
-| Manual skill management | On-demand skill loading | **Skills Copilot** |
+| Manual skill management | Native @include + optional MCP | **Skills** |
 | Context bloat from agents | Ephemeral task/work product storage | **Task Copilot** |
 | Inconsistent processes | Battle-tested workflows | **Protocol** |
 
@@ -92,7 +92,8 @@ Ask yourself:
 |---------|------------|-------------|----------|
 | **Memory** | Auto | Cross-session | Context preservation, decisions, lessons |
 | **Agents** | Protocol | Session | Expert tasks, complex work |
-| **Skills** | Auto | On-demand | Reusable patterns, workflows |
+| **Skills (Native)** | Manual (@include) | Session | Local reusable patterns, workflows |
+| **Skills (MCP)** | Auto/Manual | On-demand | Marketplace access, cross-source search |
 | **Tasks** | Auto | Per-initiative | PRDs, task tracking, work products |
 | **Commands** | Manual | Session | Quick shortcuts, workflows |
 | **Extensions** | Auto | Permanent | Team standards, custom methodologies |
@@ -149,7 +150,8 @@ Ask yourself:
 | Initialize new project | `/setup-project` | Framework installs |
 | Update all projects | `/update-project` (each project) | Syncs latest changes |
 | Search past decisions | Use `memory_search` tool | Semantic search across sessions |
-| Load reusable pattern | Skills load automatically | Or use `skill_get` manually |
+| Load local skill | `@include .claude/skills/NAME/SKILL.md` | Direct file include |
+| Search marketplace skills | Use `skill_search` tool (requires MCP) | SkillsMP access |
 
 ### Extension Type Guide
 
@@ -163,16 +165,18 @@ Ask yourself:
 
 ### Memory vs Skills vs Extensions
 
-| When to Use | Memory | Skills | Extensions |
-|-------------|--------|--------|------------|
-| Project context | ✓ Store in memory | | |
-| Team decisions | ✓ Store in memory | | |
-| Reusable workflows | | ✓ Create skill | |
-| Company standards | | | ✓ Create extension |
-| Past lessons | ✓ Store in memory | | |
-| Custom methodologies | | | ✓ Create extension |
-| Tool integrations | | ✓ Create skill | |
-| Cross-project patterns | | ✓ Global skills | ✓ Global extensions |
+| When to Use | Memory | Skills (Native) | Skills (MCP) | Extensions |
+|-------------|--------|-----------------|--------------|------------|
+| Project context | ✓ | | | |
+| Team decisions | ✓ | | | |
+| Reusable workflows | | ✓ (@include) | ✓ (skill_get) | |
+| Company standards | | | | ✓ |
+| Past lessons | ✓ | | | |
+| Custom methodologies | | | | ✓ |
+| Tool integrations | | ✓ (@include) | ✓ (skill_get) | |
+| Local patterns | | ✓ (@include) | | |
+| Marketplace skills | | | ✓ (SkillsMP) | |
+| Cross-project patterns | | ✓ (~/skills) | ✓ (Private DB) | ✓ |
 
 ---
 
@@ -228,9 +232,37 @@ MCP server providing persistent memory across sessions.
 | `cco` | Creative Chief Officer | Creative direction |
 | `kc` | Knowledge Copilot | Shared knowledge setup |
 
-### 3. Skills Copilot
+### 3. Skills (Native & MCP)
 
-MCP server for on-demand skill loading and knowledge search.
+Skills can be loaded via **native @include directive** or **Skills Copilot MCP server**.
+
+#### Native @include (Recommended for Local Skills)
+
+Load local skills directly without MCP overhead:
+
+```markdown
+## Context
+When working with Laravel:
+@include ~/.claude/skills/laravel/SKILL.md
+
+When writing tests:
+@include .claude/skills/testing/SKILL.md
+```
+
+**Benefits:**
+- Zero MCP overhead (~500 tokens saved per skill)
+- Instant loading, no network/database
+- Simpler setup (no MCP configuration)
+- Full control over skill content
+
+**Use for:**
+- Project-specific skills (`.claude/skills/`)
+- User-level skills (`~/.claude/skills/`)
+- Simple, direct loading
+
+#### Skills Copilot MCP (OPTIONAL)
+
+MCP server for advanced skill management and marketplace access.
 
 **Location:** `mcp-servers/skills-copilot/`
 
@@ -249,6 +281,13 @@ MCP server for on-demand skill loading and knowledge search.
 |------|---------|
 | `knowledge_search` | Search knowledge files (project → global) |
 | `knowledge_get` | Get specific knowledge file by path |
+
+**Use when you need:**
+- SkillsMP marketplace access (25K+ public skills)
+- Private skill storage in Postgres database
+- Cross-source skill search (DB + marketplace + local)
+- Usage analytics and caching
+- Knowledge repository extensions
 
 Knowledge is searched in two-tier resolution: project-level first (`KNOWLEDGE_REPO_PATH`), then machine-level (`~/.claude/knowledge`).
 
@@ -317,11 +356,13 @@ Streams are automatically archived when switching initiatives via `initiative_li
 
 | Tool | Purpose |
 |------|---------|
-| `checkpoint_create` | Create mid-task recovery checkpoint before risky operations |
+| `checkpoint_create` | (Optional) Manually create checkpoint outside iteration loops |
 | `checkpoint_resume` | Resume task from last checkpoint with full state |
 | `checkpoint_get` | Get specific checkpoint details |
 | `checkpoint_list` | List available checkpoints for task |
 | `checkpoint_cleanup` | Clean up old or expired checkpoints |
+
+**Note:** Checkpoints are automatically created during iteration loops. Manual `checkpoint_create()` calls are only needed for recovery points outside TDD/iteration workflows.
 
 **Validation System:**
 

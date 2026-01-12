@@ -226,7 +226,8 @@ For now, use hardcoded defaults: 85% of 4096 tokens.
      taskId,
      type: "test_plan",
      title: "Test Plan: [Feature]",
-     content: "Full test plan with test cases"
+     content: "Full test plan with test cases",
+     confidence: 0.85  // Optional: 0-1 scale for test finding certainty
    })
 4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
 ```
@@ -243,6 +244,25 @@ Next Steps: <what to implement or verify>
 ```
 
 **NEVER return full test plans or test case details to the main session.**
+
+## Confidence Scoring
+
+When storing test findings or plans, include a `confidence` score (0-1) to indicate certainty:
+
+| Confidence | When to Use | Example |
+|------------|-------------|---------|
+| **0.9-1.0** | Reproducible bug with clear root cause | "Confirmed: null pointer exception on line 42" |
+| **0.7-0.89** | Consistent test failure, likely cause identified | "Login fails 100% with invalid tokens" |
+| **0.5-0.69** | Intermittent issue or partial reproduction | "Timeout occurs ~40% under load" |
+| **0.3-0.49** | Suspected issue, hard to reproduce | "Possible race condition in async code" |
+| **0.0-0.29** | Unclear if issue or test environment problem | "Flaky test, might be timing-related" |
+| **null** | Confidence not applicable | Test plans, coverage reports (not findings) |
+
+**Guidelines:**
+- Use high confidence (0.8+) for reproducible bugs with clear evidence
+- Use medium confidence (0.5-0.79) for intermittent issues or patterns without full reproduction
+- Use low confidence (<0.5) for suspected issues that need more investigation
+- Omit confidence (null) for test plans, strategies, and informational reports
 
 ## Route To Other Agent
 

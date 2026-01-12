@@ -35,6 +35,13 @@ export async function workProductStore(
   const now = new Date().toISOString();
   const id = `WP-${uuidv4()}`;
 
+  // Validate confidence if provided
+  if (input.confidence !== undefined) {
+    if (input.confidence < 0 || input.confidence > 1) {
+      throw new Error('Confidence must be between 0 and 1');
+    }
+  }
+
   // Run validation
   const validator = getValidator();
   const task = db.getTask(input.taskId);
@@ -70,7 +77,8 @@ export async function workProductStore(
     title: input.title,
     content: input.content,
     metadata: JSON.stringify(metadata),
-    created_at: now
+    created_at: now,
+    confidence: input.confidence ?? null
   };
 
   db.insertWorkProduct(wp);
@@ -141,6 +149,7 @@ export function workProductGet(
   content: string;
   metadata: Record<string, unknown>;
   createdAt: string;
+  confidence: number | null;
 } | null {
   const wp = db.getWorkProduct(input.id);
   if (!wp) return null;
@@ -152,7 +161,8 @@ export function workProductGet(
     title: wp.title,
     content: wp.content,
     metadata: JSON.parse(wp.metadata),
-    createdAt: wp.created_at
+    createdAt: wp.created_at,
+    confidence: wp.confidence
   };
 }
 
@@ -166,6 +176,7 @@ export function workProductList(
   summary: string;
   wordCount: number;
   createdAt: string;
+  confidence: number | null;
 }> {
   const workProducts = db.listWorkProducts(input.taskId);
 
@@ -179,7 +190,8 @@ export function workProductList(
       title: wp.title,
       summary,
       wordCount,
-      createdAt: wp.created_at
+      createdAt: wp.created_at,
+      confidence: wp.confidence
     };
   });
 }

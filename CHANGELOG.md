@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-01-12
+
+### Added
+
+- **Confidence Scoring for Work Products** (P0):
+  - `work_product_store()` accepts optional `confidence` parameter (0-1 scale)
+  - `progress_summary()` filters by `minConfidence` with stats
+  - Agents (ta, qa, sec) include confidence guidance tables
+  - Database migration v9 adds confidence column
+
+- **PreToolUse Security Hooks** (P0):
+  - Secret detection (AWS keys, GitHub tokens, passwords)
+  - Destructive command prevention (`rm -rf`, `DROP TABLE`)
+  - Sensitive file protection (`.env`, credentials)
+  - MCP tools: `hook_register_security`, `hook_test_security`, `hook_list_security`
+  - Configurable rules via `.claude/hooks/security-rules.json`
+
+- **SessionStart Protocol Injection** (P1):
+  - Protocol guardrails injected directly at session start
+  - Violation tracking with severity levels (low/medium/high/critical)
+  - MCP tools: `protocol_violation_log`, `protocol_violations_get`
+  - `/memory` command shows violation counts and recent violations
+
+- **Context-Triggered Skill Auto-Invocation** (P1):
+  - Skill manifest supports `triggers: { files, keywords }`
+  - `skill_auto_detect()` MCP tool detects matching skills
+  - Example skills updated with trigger definitions
+  - Scoring algorithm ranks triggered skills
+
+- **Auto-Checkpoint Hooks** (P2):
+  - Checkpoints automatically created at start of each iteration
+  - Optional checkpoint on iteration validation failure
+  - Simplified agent prompts - no manual `checkpoint_create()` calls needed
+  - Backwards compatible - manual checkpoints still work
+  - New `src/hooks/auto-checkpoint.ts` module
+
+### Changed
+
+- **Skills Copilot Marked Optional** (P2):
+  - Native `@include` directive documented as primary method
+  - Skills Copilot MCP only needed for marketplace/database access
+  - CLAUDE.md, SETUP.md, README updated with guidance
+
+- **Agent Prompts Simplified**:
+  - Removed manual checkpoint instructions from iteration loops
+  - Added confidence scoring guidance to ta, qa, sec agents
+  - `checkpoint_create()` marked optional in CLAUDE.md
+
+### Technical
+
+- Database migrations: v9 (confidence), v10 (protocol_violations)
+- New TypeScript modules: `hooks/`, `triggers.ts`, `protocol.ts`
+- 62 files changed, +10,632 lines
+- All modules compile and build successfully
+
 ## [2.1.0] - 2026-01-12
 
 ### Added
