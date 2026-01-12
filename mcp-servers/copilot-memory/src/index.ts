@@ -33,7 +33,10 @@ import {
   storeCorrection,
   updateCorrectionStatus,
   listCorrections,
-  getCorrectionStats
+  getCorrectionStats,
+  routeCorrection,
+  applyCorrection,
+  getRoutingSummary
 } from './tools/index.js';
 import type { CorrectionStatus, CorrectionTarget } from './types/corrections.js';
 import { getInitiativeResource, getInitiativeSummary } from './resources/initiative-resource.js';
@@ -319,6 +322,34 @@ const TOOLS = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'correction_route',
+    description: 'Get routing information for a correction. Shows target file/agent and apply instructions without actually applying.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        correctionId: { type: 'string', description: 'Correction ID to route' },
+        forceTarget: {
+          type: 'string',
+          enum: ['skill', 'agent', 'memory', 'preference'],
+          description: 'Override auto-detected target'
+        },
+        forceTargetId: { type: 'string', description: 'Override target ID (skill name, agent id, etc.)' }
+      },
+      required: ['correctionId']
+    }
+  },
+  {
+    name: 'correction_apply',
+    description: 'Apply an approved correction to its target. Marks as applied and returns instructions for the responsible agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        correctionId: { type: 'string', description: 'Correction ID to apply' }
+      },
+      required: ['correctionId']
+    }
   }
 ];
 
@@ -557,6 +588,57 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{
             type: 'text',
             text: JSON.stringify(stats, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_route': {
+        const route = routeCorrection(
+          db,
+          a.correctionId as string,
+          a.forceTarget as CorrectionTarget | undefined,
+          a.forceTargetId as string | undefined
+        );
+
+        if (!route) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Correction ${a.correctionId} not found`
+            }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(route, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_apply': {
+        const result = applyCorrection(db, a.correctionId as string);
+
+        if (!result.success) {
+          return {
+            content: [{
+              type: 'text',
+              text: result.message
+            }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              message: result.message,
+              route: result.route
+            }, null, 2)
           }]
         };
       }

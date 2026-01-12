@@ -31,5 +31,9 @@ export {
   storeCorrection,
   updateCorrectionStatus,
   listCorrections,
-  getCorrectionStats
+  getCorrectionStats,
+  routeCorrection,
+  applyCorrection,
+  getRoutingSummary
 } from './correction-tools.js';
+export type { CorrectionRouteResult } from './correction-tools.js';

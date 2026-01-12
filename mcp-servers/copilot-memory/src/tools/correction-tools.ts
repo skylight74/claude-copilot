@@ -569,3 +569,182 @@ export function getCorrectionStats(db: DatabaseClient): {
 } {
   return db.getCorrectionStats();
 }
+
+// ============================================================================
+// CORRECTION ROUTING
+// ============================================================================
+
+/**
+ * Agent-to-file mapping for correction routing
+ */
+const AGENT_FILE_MAP: Record<string, string> = {
+  me: '.claude/agents/me.md',
+  ta: '.claude/agents/ta.md',
+  qa: '.claude/agents/qa.md',
+  sec: '.claude/agents/sec.md',
+  doc: '.claude/agents/doc.md',
+  do: '.claude/agents/do.md',
+  sd: '.claude/agents/sd.md',
+  uxd: '.claude/agents/uxd.md',
+  uids: '.claude/agents/uids.md',
+  uid: '.claude/agents/uid.md',
+  cw: '.claude/agents/cw.md',
+  cco: '.claude/agents/cco.md',
+  kc: '.claude/agents/kc.md'
+};
+
+/**
+ * Route types for different correction targets
+ */
+export interface CorrectionRouteResult {
+  /** Correction ID */
+  correctionId: string;
+
+  /** Target type */
+  target: CorrectionTarget;
+
+  /** Target file path or identifier */
+  targetPath: string;
+
+  /** Agent responsible for applying */
+  responsibleAgent: string;
+
+  /** Section within the target (if applicable) */
+  targetSection?: string;
+
+  /** Routing confidence (0-1) */
+  confidence: number;
+
+  /** Instructions for applying the correction */
+  applyInstructions: string;
+}
+
+/**
+ * Route a correction to the appropriate target
+ */
+export function routeCorrection(
+  db: DatabaseClient,
+  correctionId: string,
+  forceTarget?: CorrectionTarget,
+  forceTargetId?: string
+): CorrectionRouteResult | null {
+  const correction = db.getCorrection(correctionId);
+  if (!correction) return null;
+
+  const target = forceTarget || correction.target as CorrectionTarget;
+  let targetPath: string;
+  let responsibleAgent: string;
+  let targetSection: string | undefined;
+  let applyInstructions: string;
+
+  switch (target) {
+    case 'agent':
+      // Route to agent file
+      const agentId = forceTargetId || correction.agent_id || 'me';
+      targetPath = AGENT_FILE_MAP[agentId] || `.claude/agents/${agentId}.md`;
+      responsibleAgent = 'me';
+      targetSection = correction.target_section || undefined;
+      applyInstructions = `Update ${targetPath}:\n` +
+        `- Find section: ${targetSection || 'relevant section'}\n` +
+        `- Original: "${correction.original_content}"\n` +
+        `- Replace with: "${correction.corrected_content}"\n` +
+        `- Or add as new guideline if no direct replacement`;
+      break;
+
+    case 'skill':
+      // Route to skill file
+      const skillId = forceTargetId || correction.target_id;
+      if (skillId && skillId.startsWith('agent-')) {
+        // It's actually an agent correction via skill target
+        const actualAgentId = skillId.replace('agent-', '');
+        targetPath = AGENT_FILE_MAP[actualAgentId] || `.claude/agents/${actualAgentId}.md`;
+        responsibleAgent = 'me';
+      } else {
+        targetPath = skillId ? `.claude/skills/${skillId}/SKILL.md` : '.claude/skills/';
+        responsibleAgent = 'me';
+      }
+      targetSection = correction.target_section || undefined;
+      applyInstructions = `Update skill at ${targetPath}:\n` +
+        `- Section: ${targetSection || 'relevant section'}\n` +
+        `- Add pattern: "${correction.corrected_content}"\n` +
+        `- Context: "${correction.raw_user_message.substring(0, 100)}..."`;
+      break;
+
+    case 'memory':
+      // Store as lesson in Memory Copilot
+      targetPath = 'memory://lesson';
+      responsibleAgent = 'memory';
+      applyInstructions = `Store as lesson via memory_store:\n` +
+        `- Type: lesson\n` +
+        `- Content: "${correction.corrected_content}"\n` +
+        `- Tags: ["correction", "user-feedback"]\n` +
+        `- Original context: "${correction.raw_user_message.substring(0, 100)}..."`;
+      break;
+
+    case 'preference':
+      // Store as preference in Memory Copilot
+      targetPath = 'memory://preference';
+      responsibleAgent = 'memory';
+      applyInstructions = `Store as preference via memory_store:\n` +
+        `- Type: context\n` +
+        `- Content: "User prefers: ${correction.corrected_content}"\n` +
+        `- Tags: ["preference", "user-feedback"]\n` +
+        `- Metadata: { preferenceType: "style" }`;
+      break;
+
+    default:
+      // Default to memory
+      targetPath = 'memory://context';
+      responsibleAgent = 'memory';
+      applyInstructions = `Store as context via memory_store:\n` +
+        `- Type: context\n` +
+        `- Content: "${correction.corrected_content}"\n` +
+        `- Tags: ["correction"]`;
+  }
+
+  return {
+    correctionId,
+    target,
+    targetPath,
+    responsibleAgent,
+    targetSection,
+    confidence: correction.confidence,
+    applyInstructions
+  };
+}
+
+/**
+ * Apply a correction to its target
+ * Returns instructions for the appropriate agent
+ */
+export function applyCorrection(
+  db: DatabaseClient,
+  correctionId: string
+): { success: boolean; message: string; route?: CorrectionRouteResult } {
+  const route = routeCorrection(db, correctionId);
+  if (!route) {
+    return { success: false, message: `Correction ${correctionId} not found` };
+  }
+
+  // Mark as applied
+  db.updateCorrection(correctionId, {
+    status: 'applied',
+    applied_at: new Date().toISOString()
+  });
+
+  return {
+    success: true,
+    message: `Correction routed to ${route.responsibleAgent} for application`,
+    route
+  };
+}
+
+/**
+ * Get routing summary for a correction without applying
+ */
+export function getRoutingSummary(
+  db: DatabaseClient,
+  correctionId: string
+): CorrectionRouteResult | null {
+  return routeCorrection(db, correctionId);
+}
