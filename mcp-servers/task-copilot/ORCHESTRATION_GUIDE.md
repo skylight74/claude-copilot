@@ -60,7 +60,7 @@ The Claude Code Orchestration System enables **parallel development** across mul
 └─────────────────────────────────────────────────────────────┘
 
 ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│  Task Copilot    │    │  /orchestration  │    │  watch-status.py │
+│  Task Copilot    │    │  /orchestrate    │    │  watch-status.py │
 │  HTTP API        │◄───│  Command         │◄───│  Monitor         │
 │  (Port 9090)     │    │                  │    │                  │
 └──────────────────┘    └──────────────────┘    └──────────────────┘
@@ -91,7 +91,7 @@ The Claude Code Orchestration System enables **parallel development** across mul
 | Component | Purpose | Technology |
 |-----------|---------|------------|
 | **Task Copilot HTTP API** | Exposes stream/task data to external tools | Fastify (Node.js) |
-| **/orchestration command** | Generates orchestration scripts | Claude command (Markdown) |
+| **/orchestrate command** | Generates orchestration scripts | Claude command (Markdown) |
 | **watch-status.py** | Real-time progress monitoring | Python 3.8+ |
 | **start-streams.py** | Stream execution orchestrator | Python 3.8+ |
 | **Git Worktrees** | Parallel workspace isolation | Git 2.5+ |
@@ -102,7 +102,7 @@ The Claude Code Orchestration System enables **parallel development** across mul
 ```
 1. User defines streams in PRD (Stream-A, Stream-B, Stream-C)
                   ↓
-2. /orchestration command queries Task Copilot via MCP
+2. /orchestrate command queries Task Copilot via MCP
                   ↓
 3. Generates orchestration-config.json + scripts
                   ↓
@@ -176,13 +176,13 @@ Integration Phase:
 **Step 2: Generate orchestration scripts**
 ```bash
 # In Claude Code session
-/orchestration generate
+/orchestrate generate
 ```
 
 **Step 3: Start real-time monitor**
 ```bash
 # In separate terminal
-cd .claude/orchestration
+cd .claude/orchestrator
 python3 watch-status.py
 ```
 
@@ -287,7 +287,7 @@ export HTTP_API_PORT="9090"
 
 ---
 
-### 2. /orchestration Command
+### 2. /orchestrate Command
 
 **Purpose:** Generates orchestration scripts and configuration.
 
@@ -295,17 +295,20 @@ export HTTP_API_PORT="9090"
 
 | Action | Command | Description |
 |--------|---------|-------------|
-| Generate | `/orchestration` or `/orchestration generate` | Create all scripts |
-| Config | `/orchestration config` | Show current config |
-| Status | `/orchestration status` | Display stream progress |
+| Generate | `/orchestrate generate` | Create PRD and tasks (REQUIRED FIRST) |
+| Start | `/orchestrate start` | Set up and start orchestration |
+| Status | `/orchestrate status` | Display stream progress |
+| Stop | `/orchestrate stop` | Stop all workers |
 
 **What it generates:**
 
 ```
-.claude/orchestration/
-├── orchestration-config.json   # Stream configuration
-├── start-streams.py            # Orchestration script (700+ lines)
-└── README.md                   # Usage documentation
+.claude/orchestrator/
+├── orchestrate.py              # Main orchestration script
+├── task_copilot_client.py      # Data abstraction layer
+├── check_streams_data.py       # Stream data fetcher
+├── check-streams               # Status dashboard
+└── watch-status                # Live monitoring wrapper
 ```
 
 **orchestration-config.json structure:**
@@ -690,7 +693,7 @@ START INITIATIVE
 
 ```bash
 # In Claude Code session
-/orchestration generate
+/orchestrate generate
 ```
 
 **Output:**
@@ -698,14 +701,14 @@ START INITIATIVE
 ✓ Generated orchestration configuration
 
 Files created:
-  .claude/orchestration/orchestration-config.json
-  .claude/orchestration/start-streams.py
-  .claude/orchestration/README.md
+  .claude/orchestrator/orchestrate.py
+  .claude/orchestrator/task_copilot_client.py
+  .claude/orchestrator/check-streams
 
 Next steps:
-1. Review configuration: /orchestration config
-2. Start monitoring: python3 .claude/orchestration/watch-status.py
-3. Execute streams:
+1. Start orchestration: /orchestrate start
+2. Start monitoring: ./watch-status
+3. Or manually execute streams:
    - Foundation: /continue Stream-A
    - After foundation: /continue Stream-B, /continue Stream-C
    - After parallel: /continue Stream-Z
@@ -714,9 +717,8 @@ Next steps:
 #### 3. Start Real-Time Monitor
 
 ```bash
-# In separate terminal
-cd .claude/orchestration
-python3 watch-status.py
+# In separate terminal (from project root)
+./watch-status
 ```
 
 **Monitor will display:**
@@ -970,13 +972,13 @@ curl http://127.0.0.1:9090/health
 **Solution:**
 ```bash
 # 1. Check stream progress
-/orchestration status
+/orchestrate status
 
 # 2. Verify foundation complete
 # Foundation streams must show 100% before parallel can start
 
 # 3. Check dependency status
-python3 watch-status.py
+./watch-status
 # Look for "⚠ Waiting on: Stream-X"
 
 # 4. Complete blocking tasks
@@ -1077,7 +1079,7 @@ python3 -c "import requests; print(requests.__version__)"
 **Solution:**
 ```bash
 # 1. Review stream dependencies
-/orchestration status
+/orchestrate status
 
 # 2. Identify the cycle
 # Example: A depends on B, B depends on C, C depends on A
@@ -1090,7 +1092,7 @@ python3 -c "import requests; print(requests.__version__)"
 # 4. Update PRD with correct dependencies
 
 # 5. Regenerate orchestration
-/orchestration generate
+/orchestrate generate
 ```
 
 ---
@@ -1116,7 +1118,7 @@ python3 -c "import requests; print(requests.__version__)"
 # 4. Update PRD
 
 # 5. Regenerate orchestration
-/orchestration generate
+/orchestrate generate
 ```
 
 ---
@@ -1503,7 +1505,7 @@ jobs:
 
 #### stream_list()
 
-**Purpose:** List all streams (used by /orchestration command)
+**Purpose:** List all streams (used by /orchestrate command)
 
 **Parameters:**
 ```typescript
@@ -1598,10 +1600,11 @@ jobs:
 
 | File | Size | Purpose |
 |------|------|---------|
-| `.claude/orchestration/orchestration-config.json` | ~2 KB | Stream configuration |
-| `.claude/orchestration/start-streams.py` | ~20 KB | Orchestration script |
-| `.claude/orchestration/README.md` | ~8 KB | Usage documentation |
-| `.claude/orchestration/watch-status.py` | ~15 KB | Real-time monitor |
+| `.claude/orchestrator/orchestrate.py` | ~15 KB | Main orchestration script |
+| `.claude/orchestrator/task_copilot_client.py` | ~12 KB | Task Copilot data abstraction |
+| `.claude/orchestrator/check_streams_data.py` | ~3 KB | Stream data fetcher |
+| `.claude/orchestrator/check-streams` | ~10 KB | Status dashboard |
+| `.claude/orchestrator/watch-status` | ~1 KB | Live monitoring wrapper |
 | `.claude/worktrees/Stream-X/` | Varies | Parallel stream worktree |
 
 ### Environment Variables

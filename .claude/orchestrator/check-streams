@@ -2,6 +2,11 @@
 # Quick status check for all streams with detailed task progress
 # Usage: check-streams
 # Compatible with bash 3.2+ (macOS default)
+#
+# Features:
+# - Initiative-scoped stream filtering (only shows current initiative's streams)
+# - Empty state handling (no initiative, no streams, all complete)
+# - Initiative name and goal display in header
 
 # Resolve symlinks to get the real script location
 SCRIPT_PATH="${BASH_SOURCE[0]}"
@@ -102,33 +107,125 @@ read_orchestrator_data() {
 
 # Read orchestrator data
 ORCHESTRATOR_DATA=$(read_orchestrator_data 2>/dev/null)
+
+# Check for empty states
+FIRST_LINE=$(echo "$ORCHESTRATOR_DATA" | head -1)
+
+clear
+
+# Handle empty states
+case "$FIRST_LINE" in
+    "NO_DATABASE")
+        echo -e "${BOLD}$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')${NC}"
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo ""
+        echo -e "  ${DIM}No task data available${NC}"
+        echo ""
+        echo -e "  ${CYAN}To get started:${NC}"
+        echo -e "    1. Run ${BOLD}/orchestrate generate${NC} to create PRD and tasks"
+        echo -e "    2. Run ${BOLD}/orchestrate start${NC} to begin parallel execution"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo -e "${DIM}Workers: 0 | Data: Task Copilot | $(date '+%H:%M:%S')${NC}"
+        exit 0
+        ;;
+    "NO_INITIATIVE")
+        echo -e "${BOLD}$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')${NC}"
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo ""
+        echo -e "  ${YELLOW}No currently running initiatives${NC}"
+        echo ""
+        echo -e "  ${CYAN}To get started:${NC}"
+        echo -e "    1. Run ${BOLD}/protocol${NC} or ${BOLD}/orchestrate generate${NC} to start an initiative"
+        echo -e "    2. Memory Copilot will track your progress"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo -e "${DIM}Workers: 0 | Data: Task Copilot + Memory Copilot (initiative-scoped) | $(date '+%H:%M:%S')${NC}"
+        exit 0
+        ;;
+    "NO_STREAMS"|"NO_ACTIVE_STREAMS")
+        # Parse initiative info if present
+        INITIATIVE_LINE=$(echo "$ORCHESTRATOR_DATA" | grep "^INITIATIVE")
+        if [ -n "$INITIATIVE_LINE" ]; then
+            INITIATIVE_INFO="${INITIATIVE_LINE#INITIATIVE }"
+            INITIATIVE_NAME="${INITIATIVE_INFO%%|*}"
+            INITIATIVE_GOAL="${INITIATIVE_INFO#*|}"
+        else
+            INITIATIVE_NAME=""
+            INITIATIVE_GOAL=""
+        fi
+
+        echo -e "${BOLD}$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')${NC}"
+        if [ -n "$INITIATIVE_NAME" ]; then
+            echo -e "${CYAN}${INITIATIVE_NAME}${NC}"
+            if [ -n "$INITIATIVE_GOAL" ]; then
+                # Truncate goal to 70 chars
+                GOAL_DISPLAY=$(echo "$INITIATIVE_GOAL" | cut -c1-70)
+                echo -e "${DIM}${GOAL_DISPLAY}${NC}"
+            fi
+        fi
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo ""
+        if [ "$FIRST_LINE" = "NO_ACTIVE_STREAMS" ]; then
+            echo -e "  ${GREEN}✓ All streams completed in current initiative${NC}"
+        else
+            echo -e "  ${DIM}No streams in current initiative${NC}"
+        fi
+        echo ""
+        echo -e "  ${CYAN}Options:${NC}"
+        echo -e "    • Run ${BOLD}/orchestrate generate${NC} to create new tasks"
+        echo -e "    • Run ${BOLD}/continue${NC} to resume previous work"
+        echo ""
+        echo "═══════════════════════════════════════════════════════════════════════════"
+        echo -e "${DIM}Workers: 0 | Data: Task Copilot + Memory Copilot (initiative-scoped) | $(date '+%H:%M:%S')${NC}"
+        exit 0
+        ;;
+esac
+
+# Parse initiative info
+INITIATIVE_LINE=$(echo "$ORCHESTRATOR_DATA" | grep "^INITIATIVE")
+if [ -n "$INITIATIVE_LINE" ]; then
+    INITIATIVE_INFO="${INITIATIVE_LINE#INITIATIVE }"
+    INITIATIVE_NAME="${INITIATIVE_INFO%%|*}"
+    INITIATIVE_GOAL="${INITIATIVE_INFO#*|}"
+else
+    INITIATIVE_NAME=""
+    INITIATIVE_GOAL=""
+fi
+
+# Parse overall stats
 OVERALL_LINE=$(echo "$ORCHESTRATOR_DATA" | grep "^OVERALL")
 read -r _ O_COMPLETED O_TOTAL O_INPROG O_PENDING O_PCT <<< "$OVERALL_LINE"
 
-clear
+# Check for ALL_STREAMS_COMPLETE flag
+ALL_COMPLETE=$(echo "$ORCHESTRATOR_DATA" | grep -c "^ALL_STREAMS_COMPLETE")
 
 # Check worker processes
 RUNNING_COUNT=$(find "$PID_DIR" -name "*.pid" -type f 2>/dev/null | wc -l | tr -d ' ')
 
-# Build compact header with overall progress
-if [ "$O_TOTAL" -gt 0 ] 2>/dev/null; then
-    # Format: PROJECT-NAME                                          60% ✓54 ⚙1 ○35
-    HEADER=$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')
-    # Calculate padding to align percentage at position 58
-    PADDING_LEN=$((58 - ${#HEADER}))
-    PADDING=$(printf '%*s' "$PADDING_LEN" '')
+# Build header with initiative info
+HEADER=$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')
+echo -e "${BOLD}${HEADER}${NC}"
 
-    # Build stats: ✓completed ⚙in-progress ○pending
+# Show initiative name and goal if available
+if [ -n "$INITIATIVE_NAME" ]; then
+    echo -e "${CYAN}${INITIATIVE_NAME}${NC}"
+    if [ -n "$INITIATIVE_GOAL" ]; then
+        # Truncate goal to 70 chars
+        GOAL_DISPLAY=$(echo "$INITIATIVE_GOAL" | cut -c1-70)
+        echo -e "${DIM}${GOAL_DISPLAY}${NC}"
+    fi
+fi
+
+# Build compact stats line
+if [ "$O_TOTAL" -gt 0 ] 2>/dev/null; then
+    # Build stats: 60% ✓54 ⚙1 ○35
     STATS="${O_PCT}% ${GREEN}✓${O_COMPLETED}${NC}"
     if [ "${O_INPROG:-0}" -gt 0 ] 2>/dev/null; then
         STATS="${STATS} ${YELLOW}⚙${O_INPROG}${NC}"
     fi
     STATS="${STATS} ${DIM}○${O_PENDING}${NC}"
-
-    echo -e "${BOLD}${HEADER}${NC}${PADDING}${STATS}"
-else
-    HEADER=$(echo "$WORKSPACE_ID" | tr '[:lower:]' '[:upper:]')
-    echo -e "${BOLD}${HEADER}${NC}                              ${DIM}No task data${NC}"
+    echo -e "${STATS}"
 fi
 
 echo "═══════════════════════════════════════════════════════════════════════════"
@@ -178,8 +275,6 @@ echo "$ORCHESTRATOR_DATA" | grep "^STREAM" | while read -r LINE; do
         fi
     fi
 
-    # PID tracking removed from display per user request
-
     # Build mini progress bar (15 chars)
     if [ "$S_TOT" != "?" ] && [ "$S_TOT" -gt 0 ] 2>/dev/null; then
         MINI_FILLED=$((S_PCT * 15 / 100))
@@ -223,7 +318,7 @@ echo "$ORCHESTRATOR_DATA" | grep "^STREAM" | while read -r LINE; do
     fi
 
     # Build complete line with fixed columns (no PID)
-    # Audit-A  [---------------]   0%  ✓  0     ○ 5  RUN    Audit Foundation
+    # Stream-A  [---------------]   0%  ✓  0     ○ 5  RUN    Foundation
     printf "%-8s [%s] %s  ${GREEN}✓%s${NC}" "$STREAM_ID" "$MINI_BAR" "$PCT_DISPLAY" "$COMP_STR"
 
     if [ "${S_INPROG:-0}" -gt 0 ] 2>/dev/null; then
@@ -249,9 +344,9 @@ done
 
 echo "═══════════════════════════════════════════════════════════════════════════"
 
-# Show compact footer
+# Show compact footer with initiative-scoped indicator
 if [ "$RUNNING_COUNT" -gt 0 ] 2>/dev/null; then
-    echo -e "${DIM}Workers: ${RUNNING_COUNT} | Data: Task Copilot | $(date '+%H:%M:%S')${NC}"
+    echo -e "${DIM}Workers: ${RUNNING_COUNT} | Data: Task Copilot + Memory Copilot (initiative-scoped) | $(date '+%H:%M:%S')${NC}"
 else
-    echo -e "${DIM}Workers: 0 | Data: Task Copilot | $(date '+%H:%M:%S')${NC}"
+    echo -e "${DIM}Workers: 0 | Data: Task Copilot + Memory Copilot (initiative-scoped) | $(date '+%H:%M:%S')${NC}"
 fi

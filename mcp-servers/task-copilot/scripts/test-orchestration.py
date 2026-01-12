@@ -181,7 +181,7 @@ print("=" * 70)
 print("Test 6: Command File Validation")
 print("=" * 70)
 
-command_path = Path(__file__).parent.parent.parent / "templates/commands/orchestration.md"
+command_path = Path(__file__).parent.parent.parent / "templates/commands/orchestrate.md"
 
 if not command_path.exists():
     print(f"✗ Command file not found: {command_path}")

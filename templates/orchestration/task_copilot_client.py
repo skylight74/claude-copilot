@@ -9,6 +9,7 @@ Future: Can be replaced with MCP API calls when Task Copilot MCP server is avail
 """
 
 import sqlite3
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
@@ -79,6 +80,15 @@ class ProgressSummary:
         return int((self.completed_tasks / self.total_tasks) * 100)
 
 
+@dataclass
+class InitiativeDetails:
+    """Initiative details from Memory Copilot"""
+    id: str
+    name: str
+    goal: Optional[str]
+    status: str
+
+
 class TaskCopilotClient:
     """
     Client for accessing Task Copilot data.
@@ -96,6 +106,7 @@ class TaskCopilotClient:
         """
         self.workspace_id = workspace_id
         self.db_path = Path.home() / ".claude" / "tasks" / workspace_id / "tasks.db"
+        self.memory_db_path = Path.home() / ".claude" / "memory" / workspace_id / "memory.db"
 
     def _connect(self) -> sqlite3.Connection:
         """Create database connection with timeout"""
@@ -104,9 +115,12 @@ class TaskCopilotClient:
 
         return sqlite3.connect(str(self.db_path), timeout=5)
 
-    def stream_list(self) -> List[StreamInfo]:
+    def stream_list(self, initiative_id: Optional[str] = None) -> List[StreamInfo]:
         """
         Get list of all streams with their metadata.
+
+        Args:
+            initiative_id: Optional initiative ID to filter streams by
 
         Returns:
             List of StreamInfo objects
@@ -118,17 +132,33 @@ class TaskCopilotClient:
         conn = self._connect()
         try:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT
-                    json_extract(metadata, '$.streamId') as stream_id,
-                    MIN(json_extract(metadata, '$.streamName')) as stream_name,
-                    MIN(json_extract(metadata, '$.dependencies')) as dependencies_json
-                FROM tasks
-                WHERE json_extract(metadata, '$.streamId') IS NOT NULL
-                  AND archived = 0
-                GROUP BY json_extract(metadata, '$.streamId')
-                ORDER BY stream_id
-            """)
+
+            # Build query with optional initiative filter
+            if initiative_id:
+                cursor.execute("""
+                    SELECT
+                        json_extract(metadata, '$.streamId') as stream_id,
+                        MIN(json_extract(metadata, '$.streamName')) as stream_name,
+                        MIN(json_extract(metadata, '$.dependencies')) as dependencies_json
+                    FROM tasks
+                    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+                      AND archived = 0
+                      AND initiative_id = ?
+                    GROUP BY json_extract(metadata, '$.streamId')
+                    ORDER BY stream_id
+                """, (initiative_id,))
+            else:
+                cursor.execute("""
+                    SELECT
+                        json_extract(metadata, '$.streamId') as stream_id,
+                        MIN(json_extract(metadata, '$.streamName')) as stream_name,
+                        MIN(json_extract(metadata, '$.dependencies')) as dependencies_json
+                    FROM tasks
+                    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+                      AND archived = 0
+                    GROUP BY json_extract(metadata, '$.streamId')
+                    ORDER BY stream_id
+                """)
 
             streams = []
             for stream_id, stream_name, dependencies_json in cursor.fetchall():
@@ -199,9 +229,12 @@ class TaskCopilotClient:
         finally:
             conn.close()
 
-    def progress_summary(self) -> ProgressSummary:
+    def progress_summary(self, initiative_id: Optional[str] = None) -> ProgressSummary:
         """
         Get overall progress summary across all streams.
+
+        Args:
+            initiative_id: Optional initiative ID to filter by
 
         Returns:
             ProgressSummary object
@@ -214,18 +247,32 @@ class TaskCopilotClient:
         try:
             cursor = conn.cursor()
 
-            # Get overall task counts
-            cursor.execute("""
-                SELECT
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-                    SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-                    SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) as blocked
-                FROM tasks
-                WHERE json_extract(metadata, '$.streamId') IS NOT NULL
-                  AND archived = 0
-            """)
+            # Get overall task counts with optional initiative filter
+            if initiative_id:
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                        SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) as blocked
+                    FROM tasks
+                    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+                      AND archived = 0
+                      AND initiative_id = ?
+                """, (initiative_id,))
+            else:
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as total,
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+                        SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) as blocked
+                    FROM tasks
+                    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+                      AND archived = 0
+                """)
 
             row = cursor.fetchone()
             total = row[0] or 0
@@ -234,8 +281,8 @@ class TaskCopilotClient:
             pending = row[3] or 0
             blocked = row[4] or 0
 
-            # Get stream counts
-            streams = self.stream_list()
+            # Get stream counts (pass initiative_id for consistency)
+            streams = self.stream_list(initiative_id)
             stream_count = len(streams)
             completed_stream_count = 0
 
@@ -255,6 +302,87 @@ class TaskCopilotClient:
             )
         finally:
             conn.close()
+
+    def get_active_initiative_id(self) -> Optional[str]:
+        """
+        Get the currently active initiative ID from Memory Copilot.
+
+        An initiative is considered "active" if its status is:
+        - IN PROGRESS (highest priority)
+        - BLOCKED (second priority)
+        - NOT STARTED (lowest priority)
+
+        Returns:
+            Initiative ID string or None if no active initiative
+
+        Note:
+            Falls back to returning None if Memory Copilot database doesn't exist
+            or is not accessible.
+        """
+        if not self.memory_db_path.exists():
+            return None
+
+        try:
+            conn = sqlite3.connect(str(self.memory_db_path), timeout=5)
+            cursor = conn.cursor()
+
+            # Query for active initiative - prioritize by status
+            cursor.execute("""
+                SELECT id FROM initiatives
+                WHERE status IN ('IN PROGRESS', 'BLOCKED', 'NOT STARTED')
+                ORDER BY
+                    CASE status
+                        WHEN 'IN PROGRESS' THEN 1
+                        WHEN 'BLOCKED' THEN 2
+                        WHEN 'NOT STARTED' THEN 3
+                    END,
+                    created_at DESC
+                LIMIT 1
+            """)
+
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else None
+        except sqlite3.Error:
+            return None
+
+    def get_initiative_details(self, initiative_id: str) -> Optional[InitiativeDetails]:
+        """
+        Get details about a specific initiative from Memory Copilot.
+
+        Args:
+            initiative_id: Initiative ID to look up
+
+        Returns:
+            InitiativeDetails object or None if not found
+        """
+        if not self.memory_db_path.exists():
+            return None
+
+        try:
+            conn = sqlite3.connect(str(self.memory_db_path), timeout=5)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id, name, goal, status
+                FROM initiatives
+                WHERE id = ?
+            """, (initiative_id,))
+
+            row = cursor.fetchone()
+            conn.close()
+
+            if not row:
+                return None
+
+            return InitiativeDetails(
+                id=row[0],
+                name=row[1] or "Unnamed Initiative",
+                goal=row[2],
+                status=row[3] or "UNKNOWN"
+            )
+        except sqlite3.Error:
+            return None
 
     def get_stream_tasks_by_status(self, stream_id: str, status: TaskStatus) -> List[Dict]:
         """
