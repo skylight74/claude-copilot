@@ -36,10 +36,9 @@ Then STOP. Do not continue.
 
 ```bash
 ls ~/.claude/copilot/mcp-servers/copilot-memory/dist/index.js 2>/dev/null && echo "MEMORY_OK" || echo "MEMORY_MISSING"
-ls ~/.claude/copilot/mcp-servers/skills-copilot/dist/index.js 2>/dev/null && echo "SKILLS_OK" || echo "SKILLS_MISSING"
 ```
 
-**If either MISSING:**
+**If MEMORY_MISSING:**
 
 Tell user:
 
@@ -63,6 +62,8 @@ Then return here and run `/setup-project` again.
 ---
 
 Then STOP.
+
+**Note:** Skills Copilot MCP is optional. For local skills, use native `@include` directives instead. Only install Skills Copilot if you need SkillsMP marketplace access or private skill storage.
 
 ---
 
@@ -165,7 +166,8 @@ grep -E '\$[A-Z_]+' .mcp.json && echo "ERROR: Unexpanded variables found" || ech
 
 # Verify critical paths exist
 ls -l "$HOME/.claude/copilot/mcp-servers/copilot-memory/dist/index.js" && echo "Memory server OK" || echo "Memory server MISSING"
-ls -l "$HOME/.claude/copilot/mcp-servers/skills-copilot/dist/index.js" && echo "Skills server OK" || echo "Skills server MISSING"
+
+# Note: Skills Copilot is optional - only check if configured in template
 
 # Validate JSON
 node -e "JSON.parse(require('fs').readFileSync('.mcp.json', 'utf8'))" && echo "JSON valid" || echo "JSON INVALID"
@@ -270,9 +272,13 @@ All must exist.
 2. Run `/mcp` to verify servers are connected:
    ```
    ● copilot-memory
-   ● skills-copilot
    ```
+   Note: Skills Copilot (optional) only shows if configured in `.mcp.json`
 3. Run `/protocol` to start working
+
+**Using Skills:**
+- For local skills: Use `@include .claude/skills/NAME/SKILL.md` in your prompts
+- For marketplace access: Install Skills Copilot MCP (see mcp-servers/skills-copilot/README.md)
 
 {{IF NO_KNOWLEDGE}}
 **Optional: Set up shared knowledge**

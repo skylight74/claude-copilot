@@ -18,6 +18,7 @@ import type {
   PrdStatus,
   PerformanceRow,
   CheckpointRow,
+  ProtocolViolationRow,
 } from './types.js';
 
 // Schema definition
@@ -234,6 +235,15 @@ CREATE INDEX IF NOT EXISTS idx_agent_activity_task ON agent_activity(task_id);
 CREATE INDEX IF NOT EXISTS idx_agent_activity_heartbeat ON agent_activity(last_heartbeat DESC);
 `;
 
+// Migration SQL for version 9: Confidence Scoring
+const MIGRATION_V9_SQL = `
+-- Add confidence column to work_products
+ALTER TABLE work_products ADD COLUMN confidence REAL DEFAULT NULL;
+
+-- Index for efficient confidence filtering
+CREATE INDEX IF NOT EXISTS idx_work_products_confidence ON work_products(confidence DESC);
+`;
+
 const MIGRATION_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS migrations (
   version INTEGER PRIMARY KEY,
@@ -241,7 +251,35 @@ CREATE TABLE IF NOT EXISTS migrations (
 );
 `;
 
-const CURRENT_VERSION = 8;
+// Migration SQL for version 10: Protocol Violations
+const MIGRATION_V10_SQL = `
+-- protocol_violations table
+CREATE TABLE IF NOT EXISTS protocol_violations (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  initiative_id TEXT,
+  violation_type TEXT NOT NULL CHECK(violation_type IN (
+    'files_read_exceeded',
+    'code_written_directly',
+    'plan_created_directly',
+    'generic_agent_used',
+    'response_tokens_exceeded',
+    'work_product_not_stored'
+  )),
+  severity TEXT NOT NULL CHECK(severity IN ('low', 'medium', 'high', 'critical')),
+  context TEXT NOT NULL,
+  suggestion TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_violations_session ON protocol_violations(session_id);
+CREATE INDEX IF NOT EXISTS idx_violations_initiative ON protocol_violations(initiative_id);
+CREATE INDEX IF NOT EXISTS idx_violations_type ON protocol_violations(violation_type);
+CREATE INDEX IF NOT EXISTS idx_violations_severity ON protocol_violations(severity);
+CREATE INDEX IF NOT EXISTS idx_violations_created ON protocol_violations(created_at DESC);
+`;
+
+const CURRENT_VERSION = 10;
 
 export class DatabaseClient {
   private db: Database.Database;
@@ -350,6 +388,24 @@ export class DatabaseClient {
       this.db.exec(MIGRATION_V8_SQL);
       this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
         8,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v9: Confidence Scoring
+    if (currentVersion < 9) {
+      this.db.exec(MIGRATION_V9_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        9,
+        new Date().toISOString()
+      );
+    }
+
+    // Migration v10: Protocol Violations
+    if (currentVersion < 10) {
+      this.db.exec(MIGRATION_V10_SQL);
+      this.db.prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)').run(
+        10,
         new Date().toISOString()
       );
     }
@@ -566,8 +622,8 @@ export class DatabaseClient {
   // Work Product operations
   insertWorkProduct(wp: WorkProductRow): void {
     this.db.prepare(`
-      INSERT INTO work_products (id, task_id, type, title, content, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO work_products (id, task_id, type, title, content, metadata, created_at, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       wp.id,
       wp.task_id,
@@ -575,7 +631,8 @@ export class DatabaseClient {
       wp.title,
       wp.content,
       wp.metadata,
-      wp.created_at
+      wp.created_at,
+      wp.confidence
     );
   }
 
@@ -1381,6 +1438,96 @@ export class DatabaseClient {
       last_heartbeat: string;
       completed_at: string | null;
     }>;
+  }
+
+  // ============================================================================
+  // PROTOCOL VIOLATIONS
+  // ============================================================================
+
+  /**
+   * Insert protocol violation
+   */
+  insertProtocolViolation(violation: {
+    id: string;
+    session_id: string;
+    initiative_id: string | null;
+    violation_type: string;
+    severity: string;
+    context: string;
+    suggestion: string | null;
+    created_at: string;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO protocol_violations (id, session_id, initiative_id, violation_type, severity, context, suggestion, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      violation.id,
+      violation.session_id,
+      violation.initiative_id,
+      violation.violation_type,
+      violation.severity,
+      violation.context,
+      violation.suggestion,
+      violation.created_at
+    );
+  }
+
+  /**
+   * Get protocol violations with filters
+   */
+  getProtocolViolations(options: {
+    sessionId?: string;
+    initiativeId?: string;
+    since?: string;
+    violationType?: string;
+    severity?: string;
+    limit?: number;
+  }): Array<{
+    id: string;
+    session_id: string;
+    initiative_id: string | null;
+    violation_type: string;
+    severity: string;
+    context: string;
+    suggestion: string | null;
+    created_at: string;
+  }> {
+    let sql = 'SELECT * FROM protocol_violations WHERE 1=1';
+    const params: unknown[] = [];
+
+    if (options.sessionId) {
+      sql += ' AND session_id = ?';
+      params.push(options.sessionId);
+    }
+
+    if (options.initiativeId) {
+      sql += ' AND initiative_id = ?';
+      params.push(options.initiativeId);
+    }
+
+    if (options.since) {
+      sql += ' AND created_at >= ?';
+      params.push(options.since);
+    }
+
+    if (options.violationType) {
+      sql += ' AND violation_type = ?';
+      params.push(options.violationType);
+    }
+
+    if (options.severity) {
+      sql += ' AND severity = ?';
+      params.push(options.severity);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+
+    if (options.limit) {
+      sql += ' LIMIT ?';
+      params.push(options.limit);
+    }
+
+    return this.db.prepare(sql).all(...params) as ProtocolViolationRow[];
   }
 
   close(): void {

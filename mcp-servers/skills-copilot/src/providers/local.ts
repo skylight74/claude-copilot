@@ -200,19 +200,47 @@ export class LocalProvider {
         ? pathParts[categoryIndex + 1].replace(/^\d+-/, '')
         : undefined;
 
+      // Parse triggers (optional)
+      const triggers = this.parseTriggers(frontmatter);
+
       return {
         id: `local-${name}`,
         name,
         description,
         category,
         keywords: this.extractKeywords(description),
-        source: 'local'
+        source: 'local',
+        triggers
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       console.warn(`Failed to parse ${skillPath}: ${message}`);
       return null;
     }
+  }
+
+  /**
+   * Parse triggers from frontmatter YAML
+   */
+  private parseTriggers(frontmatter: string): import('../types.js').SkillTriggers | undefined {
+    // Parse trigger_files (array format)
+    const triggerFilesMatch = frontmatter.match(/trigger_files:\s*\[([^\]]+)\]/);
+    const files = triggerFilesMatch
+      ? triggerFilesMatch[1].split(',').map(f => f.trim().replace(/['"]/g, ''))
+      : undefined;
+
+    // Parse trigger_keywords (array format)
+    const triggerKeywordsMatch = frontmatter.match(/trigger_keywords:\s*\[([^\]]+)\]/);
+    const keywords = triggerKeywordsMatch
+      ? triggerKeywordsMatch[1].split(',').map(k => k.trim().replace(/['"]/g, ''))
+      : undefined;
+
+    // Only return triggers if at least one is defined
+    if (files || keywords) {
+      return { files, keywords };
+    }
+
+    return undefined;
   }
 
   /**
@@ -405,5 +433,20 @@ export class LocalProvider {
   rediscover(): void {
     this.discoveryCache.clear();
     this.discoverSkills();
+  }
+
+  /**
+   * Get trigger definitions for all skills
+   */
+  getAllTriggers(): Map<string, import('../types.js').SkillTriggers> {
+    const triggers = new Map<string, import('../types.js').SkillTriggers>();
+
+    for (const [name, meta] of this.skillsCache.entries()) {
+      if (meta.triggers) {
+        triggers.set(name, meta.triggers);
+      }
+    }
+
+    return triggers;
   }
 }

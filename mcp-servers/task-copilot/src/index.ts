@@ -34,8 +34,11 @@ import { agentHandoff, agentChainGet } from './tools/agent-handoff.js';
 import { preflightCheck } from './tools/preflight.js';
 import { worktreeConflictStatus, worktreeConflictResolve } from './tools/worktree.js';
 import { scopeChangeRequest, scopeChangeReview, scopeChangeList } from './tools/scope-change.js';
+import { hookRegisterSecurity, hookListSecurity, hookTestSecurity, hookToggleSecurity, initializeSecurityHooks } from './tools/security-hooks.js';
+import { protocolViolationLog, protocolViolationsGet } from './tools/protocol.js';
 import { getValidator, initValidator } from './validation/index.js';
 import { createHttpServer } from './http-server.js';
+import { initializeAutoCheckpointHooks } from './hooks/auto-checkpoint.js';
 import type {
   PrdCreateInput,
   PrdGetInput,
@@ -235,7 +238,7 @@ const TOOLS = [
   },
   {
     name: 'work_product_store',
-    description: 'Store agent output',
+    description: 'Store agent output with optional confidence scoring (0-1 scale)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -247,7 +250,13 @@ const TOOLS = [
         },
         title: { type: 'string', description: 'Work product title' },
         content: { type: 'string', description: 'Full content' },
-        metadata: { type: 'object', description: 'Optional metadata' }
+        metadata: { type: 'object', description: 'Optional metadata' },
+        confidence: {
+          type: 'number',
+          description: 'Confidence score 0-1 (optional). Use to filter noise in multi-agent results. High (0.8+), Medium (0.5-0.79), Low (<0.5)',
+          minimum: 0,
+          maximum: 1
+        }
       },
       required: ['taskId', 'type', 'title', 'content']
     }
@@ -320,11 +329,17 @@ const TOOLS = [
   },
   {
     name: 'progress_summary',
-    description: 'Get high-level progress summary for initiative',
+    description: 'Get high-level progress summary for initiative with optional confidence filtering',
     inputSchema: {
       type: 'object',
       properties: {
-        initiativeId: { type: 'string', description: 'Initiative ID (default: current initiative)' }
+        initiativeId: { type: 'string', description: 'Initiative ID (default: current initiative)' },
+        minConfidence: {
+          type: 'number',
+          description: 'Filter work products by minimum confidence score (0-1). Filters noise in multi-agent results.',
+          minimum: 0,
+          maximum: 1
+        }
       }
     }
   },
@@ -814,6 +829,138 @@ const TOOLS = [
         }
       }
     }
+  },
+  // Security Hook Tools
+  {
+    name: 'hook_register_security',
+    description: 'Register custom security rules or reset to defaults. Rules intercept tool calls before execution to prevent security issues.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        rules: {
+          type: 'array',
+          description: 'Custom security rules to register',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Unique rule ID (lowercase-hyphenated)' },
+              name: { type: 'string', description: 'Human-readable rule name' },
+              description: { type: 'string', description: 'What this rule detects' },
+              enabled: { type: 'boolean', description: 'Whether rule is active (default: true)' },
+              priority: { type: 'number', description: 'Priority 1-100 (higher runs first, default: 50)' },
+              patterns: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Regex patterns to match (as strings)'
+              },
+              severity: {
+                type: 'string',
+                enum: ['low', 'medium', 'high', 'critical'],
+                description: 'Severity level'
+              },
+              action: {
+                type: 'string',
+                enum: ['allow', 'warn', 'block'],
+                description: 'Action when pattern matches'
+              }
+            },
+            required: ['id', 'name', 'description', 'patterns', 'action']
+          }
+        },
+        resetToDefaults: { type: 'boolean', description: 'Reset to default security rules (ignores custom rules)' }
+      }
+    }
+  },
+  {
+    name: 'hook_list_security',
+    description: 'List active security rules and their status',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        includeDisabled: { type: 'boolean', description: 'Include disabled rules (default: false)' },
+        ruleId: { type: 'string', description: 'Get specific rule by ID (optional)' }
+      }
+    }
+  },
+  {
+    name: 'hook_test_security',
+    description: 'Test security rules against a tool call without executing it (dry-run)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        toolName: { type: 'string', description: 'Tool name to test (e.g., "Edit", "Write", "Bash")' },
+        toolInput: { type: 'object', description: 'Tool input parameters to test' },
+        metadata: { type: 'object', description: 'Optional metadata for testing' }
+      },
+      required: ['toolName', 'toolInput']
+    }
+  },
+  {
+    name: 'hook_toggle_security',
+    description: 'Enable or disable a specific security rule',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ruleId: { type: 'string', description: 'Rule ID to toggle' },
+        enabled: { type: 'boolean', description: 'Enable (true) or disable (false)' }
+      },
+      required: ['ruleId', 'enabled']
+    }
+  },
+  // Protocol Violation Tools
+  {
+    name: 'protocol_violation_log',
+    description: 'Log a main session protocol violation for compliance tracking',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        violationType: {
+          type: 'string',
+          enum: ['files_read_exceeded', 'code_written_directly', 'plan_created_directly', 'generic_agent_used', 'response_tokens_exceeded', 'work_product_not_stored'],
+          description: 'Type of protocol violation'
+        },
+        severity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'critical'],
+          description: 'Severity level of violation'
+        },
+        context: {
+          type: 'object',
+          description: 'Violation context (filesRead, agentUsed, responseTokens, description)',
+          properties: {
+            filesRead: { type: 'number' },
+            agentUsed: { type: 'string' },
+            responseTokens: { type: 'number' },
+            description: { type: 'string' }
+          }
+        },
+        suggestion: { type: 'string', description: 'Suggested correction action (optional)' }
+      },
+      required: ['violationType', 'severity', 'context']
+    }
+  },
+  {
+    name: 'protocol_violations_get',
+    description: 'Get protocol violations with optional filters. Use to analyze compliance and identify patterns.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string', description: 'Filter by session ID (optional)' },
+        initiativeId: { type: 'string', description: 'Filter by initiative ID (optional)' },
+        since: { type: 'string', description: 'Filter violations since ISO timestamp (optional)' },
+        violationType: {
+          type: 'string',
+          enum: ['files_read_exceeded', 'code_written_directly', 'plan_created_directly', 'generic_agent_used', 'response_tokens_exceeded', 'work_product_not_stored'],
+          description: 'Filter by violation type (optional)'
+        },
+        severity: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'critical'],
+          description: 'Filter by severity (optional)'
+        },
+        limit: { type: 'number', description: 'Max violations to return (default: 100)' }
+      }
+    }
   }
 ];
 
@@ -904,7 +1051,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: a.type as WorkProductType,
           title: a.title as string,
           content: a.content as string,
-          metadata: a.metadata as Record<string, unknown> | undefined
+          metadata: a.metadata as Record<string, unknown> | undefined,
+          confidence: a.confidence as number | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -964,7 +1112,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'progress_summary': {
         const result = progressSummary(db, {
-          initiativeId: a.initiativeId as string | undefined
+          initiativeId: a.initiativeId as string | undefined,
+          minConfidence: a.minConfidence as number | undefined
         });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -1329,6 +1478,72 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
 
+      // Security Hook Tools
+      case 'hook_register_security': {
+        const result = hookRegisterSecurity(db, {
+          rules: a.rules as Array<{
+            id: string;
+            name: string;
+            description: string;
+            enabled?: boolean;
+            priority?: number;
+            patterns?: string[];
+            severity?: 'low' | 'medium' | 'high' | 'critical';
+            action?: 'allow' | 'warn' | 'block';
+          }> | undefined,
+          resetToDefaults: a.resetToDefaults as boolean | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'hook_list_security': {
+        const result = hookListSecurity(db, {
+          includeDisabled: a.includeDisabled as boolean | undefined,
+          ruleId: a.ruleId as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'hook_test_security': {
+        const result = await hookTestSecurity(db, {
+          toolName: a.toolName as string,
+          toolInput: a.toolInput as Record<string, unknown>,
+          metadata: a.metadata as Record<string, unknown> | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'hook_toggle_security': {
+        const result = hookToggleSecurity(db, {
+          ruleId: a.ruleId as string,
+          enabled: a.enabled as boolean
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      // Protocol Violation Tools
+      case 'protocol_violation_log': {
+        const result = protocolViolationLog(db, {
+          violationType: a.violationType as any,
+          severity: a.severity as any,
+          context: a.context as any,
+          suggestion: a.suggestion as string | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
+      case 'protocol_violations_get': {
+        const result = protocolViolationsGet(db, {
+          sessionId: a.sessionId as string | undefined,
+          initiativeId: a.initiativeId as string | undefined,
+          since: a.since as string | undefined,
+          violationType: a.violationType as any,
+          severity: a.severity as any,
+          limit: a.limit as number | undefined
+        });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     }
@@ -1349,6 +1564,20 @@ async function main() {
 
   // Initialize validation system
   initValidator();
+
+  // Initialize security hooks system
+  initializeSecurityHooks();
+
+  // Initialize auto-checkpoint hooks
+  initializeAutoCheckpointHooks(db, {
+    enabled: true,
+    triggers: {
+      iterationStart: true,
+      iterationFailure: true,
+      taskStatusChange: false,
+      workProductStore: false,
+    },
+  });
 
   // Clean up expired checkpoints on startup
   const expiredCount = db.deleteExpiredCheckpoints();

@@ -1,6 +1,42 @@
-# Skills Copilot MCP Server
+# Skills Copilot MCP Server (OPTIONAL)
 
-On-demand skill loading from multiple sources. Reduces token overhead by 85% compared to loading all skills upfront.
+**Note: This MCP server is OPTIONAL.** For simple local skill loading, use native `@include` directives instead (see "When to Use" below).
+
+Advanced on-demand skill loading from multiple sources when you need marketplace access, private skill storage, or cross-source search.
+
+## When to Use
+
+### Use Native @include (Recommended)
+
+For local skills, use native Claude Code directives:
+
+```markdown
+## Context
+When working with Laravel:
+@include ~/.claude/skills/laravel/SKILL.md
+
+When writing tests:
+@include .claude/skills/testing/SKILL.md
+```
+
+**Benefits:**
+- Zero MCP overhead (~500 tokens saved per skill vs MCP)
+- Instant loading, no network/database
+- No setup required (just create files)
+- Full control over skill content
+
+### Use Skills Copilot MCP (This Server)
+
+Only install if you need:
+
+| Feature | Requires MCP |
+|---------|--------------|
+| SkillsMP marketplace (25K+ public skills) | ✓ Yes |
+| Private skill storage in Postgres | ✓ Yes |
+| Cross-source skill search | ✓ Yes |
+| Usage analytics and caching | ✓ Yes |
+| Knowledge repository extensions | ✓ Yes |
+| Local skill loading | ✗ No (use @include) |
 
 ## Features
 
@@ -116,6 +152,7 @@ Changes take effect after restarting.
 | `skill_save` | Save skill to private database |
 | `skill_cache_clear` | Clear cache (all or specific skill) |
 | `skill_discover` | Force re-scan of auto-discovery paths |
+| `skill_auto_detect` | Auto-detect skills based on file patterns and keywords |
 | `skills_hub_status` | Check provider status (includes discovery stats) |
 
 ### Extension Tools
@@ -151,13 +188,19 @@ Each skill must be in its own directory with a `SKILL.md` file:
 ### Required Frontmatter
 
 Skills must have valid YAML frontmatter with at minimum:
-- `name`: Unique skill identifier
+- `name` or `skill_name`: Unique skill identifier
 - `description`: Brief description
+
+Optional trigger fields for context-based auto-detection:
+- `trigger_files`: Array of file patterns (glob-like) that trigger this skill
+- `trigger_keywords`: Array of keywords that trigger this skill
 
 ```markdown
 ---
-name: my-custom-skill
+skill_name: my-custom-skill
 description: Does something useful
+trigger_files: ["*.test.ts", "*.spec.js"]
+trigger_keywords: [testing, jest, vitest]
 ---
 
 # Skill Content
@@ -185,6 +228,65 @@ Skills are validated on discovery:
 skill_discover({ clearCache: false })  // Re-scan without clearing main cache
 skill_discover({ clearCache: true })   // Full refresh
 ```
+
+## Context-Triggered Skills
+
+Skills can define triggers to enable context-based auto-detection. When you're working with specific files or discussing certain topics, relevant skills can be automatically suggested.
+
+### Trigger Types
+
+| Trigger Type | Format | Example |
+|--------------|--------|---------|
+| File patterns | Glob-like patterns | `*.test.ts`, `**\/docs/**\/*.md` |
+| Keywords | Text keywords | `testing`, `documentation`, `validation` |
+
+### File Pattern Matching
+
+Patterns support:
+- Wildcards: `*.md` matches any markdown file
+- Path segments: `**\/test/**\/` matches test directories anywhere
+- Extensions: `.test.ts`, `.spec.js`
+- Combined: `src/**\/*.test.ts`
+
+### Auto-Detection
+
+Use `skill_auto_detect` to find skills matching your current context:
+
+```
+skill_auto_detect({
+  files: ["docs/api.md", "docs/setup.md"],
+  text: "We need to validate the documentation structure",
+  limit: 5
+})
+```
+
+Returns ranked list of skills with match scores based on:
+- File pattern matches (+10 points per file)
+- Keyword matches (+5 points per keyword)
+
+### Example Skill with Triggers
+
+```markdown
+---
+skill_name: test-automation
+description: Generate test suites for TypeScript code
+trigger_files: ["*.test.ts", "*.spec.ts", "**\/__tests__/**\/*"]
+trigger_keywords: [testing, jest, vitest, test-suite, unit-test]
+---
+
+# Test Automation
+
+Generate comprehensive test suites...
+```
+
+### Integration with Agents
+
+Agents can call `skill_auto_detect` at the start of a task to automatically load relevant skills based on:
+- Files mentioned in task description
+- Keywords in user request
+- Files being modified
+
+This reduces the need to manually search for skills and ensures relevant expertise is always available.
 
 ## Usage Examples
 
@@ -290,13 +392,116 @@ Claude reads this at session start (~200 tokens) and knows what skills are avail
 
 ## Token Impact
 
-| Scenario | Before | After |
-|----------|--------|-------|
-| Session start | 42,000 tokens | 5,000 tokens |
-| Per skill load | N/A | ~2,000 tokens |
-| Available skills | 21 | 25,000+ |
+### Native @include vs MCP
 
-**Result: 85% reduction in baseline token usage**
+| Method | Session Start | Per Skill | When to Use |
+|--------|---------------|-----------|-------------|
+| Native @include | ~0 tokens (no MCP overhead) | ~1,500 tokens (direct read) | Local skills only |
+| Skills Copilot MCP | ~500 tokens (MCP init) | ~2,000 tokens (with metadata) | Marketplace/search/DB |
+
+### Historical Context
+
+| Scenario | Before MCP | With Skills Copilot | With Native @include |
+|----------|------------|---------------------|---------------------|
+| Session start (all skills) | 42,000 tokens | 5,000 tokens | ~0 tokens |
+| On-demand skill load | N/A | ~2,000 tokens | ~1,500 tokens |
+| Available skills | 21 (preloaded) | 25,000+ (marketplace) | Unlimited (local files) |
+
+**Result: Native @include is most efficient for local skills, MCP adds value for marketplace access**
+
+## Migration Guide
+
+### From skill_get() to @include
+
+**Before (MCP):**
+```typescript
+// In agent prompt or session
+const skill = await skill_get({ name: "laravel" });
+// ~2,000 tokens per call
+```
+
+**After (Native):**
+```markdown
+## Context
+@include ~/.claude/skills/laravel/SKILL.md
+# ~1,500 tokens, no MCP overhead
+```
+
+### When to Keep Using MCP
+
+Keep `skill_get()` if you:
+- Search SkillsMP marketplace (`skill_search`)
+- Store private skills in database (`skill_save`)
+- Need cross-source search (DB + marketplace + local)
+- Track usage analytics
+- Use knowledge repository extensions
+
+### Hybrid Approach (Recommended)
+
+Use both for maximum flexibility:
+
+```markdown
+## Context
+# Native for local/frequent skills
+@include .claude/skills/testing/SKILL.md
+@include ~/.claude/skills/laravel/SKILL.md
+
+# MCP for marketplace/search/one-time skills
+When needed, search SkillsMP: skill_search({ query: "nextjs app router" })
+```
+
+## Creating Skills for Native @include
+
+### Skill File Structure
+
+```
+.claude/skills/
+├── laravel/
+│   └── SKILL.md
+├── testing/
+│   └── SKILL.md
+└── custom-workflow/
+    └── SKILL.md
+```
+
+### Skill File Format
+
+```markdown
+---
+skill_name: laravel
+description: Laravel best practices and patterns
+version: 1.0
+---
+
+# Laravel Skill
+
+Your skill content here...
+```
+
+### Using Skills in Prompts
+
+**In CLAUDE.md:**
+```markdown
+## Available Skills
+
+Local skills (load with @include):
+- Laravel: `.claude/skills/laravel/SKILL.md`
+- Testing: `.claude/skills/testing/SKILL.md`
+```
+
+**In conversation:**
+```markdown
+I need to build a Laravel API endpoint.
+
+@include .claude/skills/laravel/SKILL.md
+```
+
+### Global vs Project Skills
+
+| Location | Scope | Use For |
+|----------|-------|---------|
+| `~/.claude/skills/` | All projects | Language frameworks, common patterns |
+| `.claude/skills/` | Single project | Project-specific workflows, domain logic |
 
 ## Development
 

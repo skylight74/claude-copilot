@@ -10,7 +10,7 @@ Headless orchestration spawns multiple autonomous Claude Code workers that run i
 - **Runs without user interaction** - workers are fully autonomous
 - **Queries Task Copilot at runtime** - no static configuration files
 - **Manages process lifecycle** - auto-restart on failure, PID tracking, log capture
-- **Enforces phase dependencies** - foundation → parallel → integration
+- **Resolves dependencies dynamically** - streams define their own execution order
 
 ### Architecture
 
@@ -59,11 +59,20 @@ python3 --version  # Should be 3.8 or higher
 
 Tasks must be organized into streams with metadata:
 
-- `streamId` - Unique identifier (e.g., "Stream-A")
-- `streamName` - Human-readable name (e.g., "foundation")
-- `streamPhase` - Execution phase: `"foundation"`, `"parallel"`, or `"integration"` (defaults to `"parallel"` if not specified)
+- `streamId` - Unique identifier (e.g., "Stream-A", "Foundation-A")
+- `streamName` - Human-readable name (optional, defaults to streamId)
+- `dependencies` - Array of streamIds that must complete first (e.g., `["Stream-A"]` or `[]` for no dependencies)
 
-Work with `@agent-ta` to create a PRD with organized streams.
+**Example metadata:**
+```json
+{
+  "streamId": "Stream-B",
+  "streamName": "API Implementation",
+  "dependencies": ["Stream-A"]
+}
+```
+
+Work with `@agent-ta` to create a PRD with organized streams and proper dependencies.
 
 ### 3. Claude Code CLI
 
@@ -77,20 +86,31 @@ which claude  # Should show path to Claude Code binary
 
 ## Quick Start
 
-### Step 1: Create Streams
+### Step 1: Generate PRD and Tasks (REQUIRED)
 
-Start with `/protocol` and work with `@agent-ta`:
+Run `/orchestrate generate` to create a PRD with proper stream metadata:
 
 ```
-User: /protocol
-User: Create a PRD with these streams:
-      - Foundation: Core types (4 tasks)
-      - Parallel A: API implementation (5 tasks)
-      - Parallel B: UI components (4 tasks)
-      - Integration: Tests and docs (3 tasks)
+User: /orchestrate generate
+Assistant: What feature or initiative should I plan for orchestration?
+User: Implement user authentication with OAuth
 ```
 
-The Tech Architect will create a PRD with tasks organized into streams.
+This invokes `@agent-ta` to:
+- Create a PRD using `prd_create()` in Task Copilot
+- Create tasks using `task_create()` with required stream metadata
+- Validate stream structure (foundation streams, no circular dependencies)
+- Display dependency visualization
+
+**Stream metadata format:**
+```json
+{
+  "streamId": "Stream-B",
+  "streamName": "API Implementation",
+  "dependencies": ["Stream-A"],
+  "files": ["src/api/auth.ts", "src/api/session.ts"]
+}
+```
 
 ### Step 2: Start Orchestration
 
@@ -98,9 +118,21 @@ The Tech Architect will create a PRD with tasks organized into streams.
 User: /orchestrate start
 ```
 
+**Pre-flight checks run automatically:**
+- Validates streams exist in Task Copilot
+- Checks at least one foundation stream exists (empty dependencies)
+- Warns about tasks assigned to non-'me' agents (offers to reassign)
+- Verifies no circular dependencies
+
 On first run, this automatically:
 - Creates `.claude/orchestrator/` directory
-- Copies orchestration templates (orchestrate.py, check-streams, watch-status, etc.)
+- Copies orchestration templates:
+  - `orchestrate.py` - Main orchestrator with dynamic dependency resolution
+  - `task_copilot_client.py` - Clean abstraction for Task Copilot database
+  - `check_streams_data.py` - Data fetcher for status scripts
+  - `check-streams` - Status dashboard (bash)
+  - `watch-status` - Live monitoring wrapper
+  - `ORCHESTRATION_GUIDE.md` - Complete documentation
 - Creates `./watch-status` symlink at project root
 - Makes scripts executable
 
@@ -113,13 +145,12 @@ python .claude/orchestrator/orchestrate.py start
 
 **The orchestrator will:**
 
-1. Query Task Copilot for streams
-2. Spawn foundation workers first
-3. Wait for foundation to complete
-4. Spawn parallel workers
-5. Wait for parallel to complete
-6. Spawn integration workers
-7. Auto-restart any failed workers
+1. Query Task Copilot for all streams and their dependencies
+2. Build dependency graph dynamically
+3. Start streams with no dependencies immediately
+4. Continuously poll (every 30s) for newly-ready streams
+5. Spawn worker when all dependencies are 100% complete
+6. Auto-restart any failed workers (up to 10 attempts)
 
 ### Step 3: Monitor Progress
 
@@ -132,42 +163,65 @@ In a separate terminal, run the live monitor:
 **Output:**
 
 ```
-╔═══════════════════════════════════════════════════════════════════════╗
-║              YOUR-PROJECT - STREAM STATUS                             ║
-╚═══════════════════════════════════════════════════════════════════════╝
-
-📊 Overall Progress
-───────────────────────────────────────────────────────────────────────
-  [████████████████████████░░░░░░░░░░░░░░░░] 62%
-  ✓ 32 completed  │  ⚡ 4 in progress  │  ◯ 15 pending  │  Total: 51
-
-🖥  Stream Details
-───────────────────────────────────────────────────────────────────────
-  Workers: 3 running
-
-  ✓ Stream-A
-    [███████████████] 7/7 (100%)
-    ✓7
-    Status: Completed
-
-  ◐ Stream-B
-    [██████████░░░░░] 7/10 (70%)
-    ✓7  ⚡1  ○2
-    Status: Working (PID: 12345)
-
-  ● Stream-C
-    [████████░░░░░░░] 2/5 (40%)
-    ✓2  ⚡1  ○2
-    Status: Running (PID: 12346)
-
-⌨  Quick Actions
-───────────────────────────────────────────────────────────────────────
-  python orchestrate.py status        Full worker status
-  python orchestrate.py logs Stream-A Tail worker logs
-  python orchestrate.py stop          Stop all workers
-
-Data: Task Copilot │ 3 workers │ 16:42:11
+YOUR-PROJECT
+Current Initiative                                    62% ✓32 ⚙4 ○15
+Implement user authentication with OAuth
+═══════════════════════════════════════════════════════════════════════════
+Stream-A [===============] 100%  ✓  7        DONE  2h31m  Foundation
+Stream-B [==========-----]  70%  ✓  7  ⚙ 1  RUN   1h45m  API Layer
+Stream-C [========-------]  40%  ✓  2  ⚙ 1  RUN     52m  UI Components
+Stream-Z [---------------]   0%  ✓  0     ○ 3  ---    ---  Integration
+═══════════════════════════════════════════════════════════════════════════
+Workers: 2 | Data: Task Copilot + Memory Copilot (initiative-scoped) | 16:42:11
 ```
+
+**Status column key:**
+- `DONE` - Stream complete (green)
+- `RUN` - Worker actively running (yellow)
+- `FIN` - Finishing up (green)
+- `STOP` - Worker stopped unexpectedly (red)
+- `ERR` - Worker encountered error (red)
+- `---` - Not started yet (dim)
+
+**Runtime column:** Shows elapsed time since worker started (e.g., `2h31m`, `45m`, `<1m`)
+
+---
+
+## File Structure
+
+After running `/orchestrate start` for the first time, your project will have:
+
+```
+your-project/
+├── .claude/
+│   └── orchestrator/
+│       ├── orchestrate.py           # Main orchestrator (647 lines)
+│       ├── task_copilot_client.py   # Task Copilot data abstraction (360 lines)
+│       ├── check_streams_data.py    # Stream data fetcher (50 lines)
+│       ├── check-streams            # Status dashboard script (269 lines)
+│       ├── watch-status             # Live monitoring wrapper (26 lines)
+│       ├── ORCHESTRATION_GUIDE.md   # Complete documentation (copy of this)
+│       ├── logs/                    # Worker logs (created at runtime)
+│       │   ├── Stream-A.log
+│       │   ├── Stream-B.log
+│       │   └── Stream-C.log
+│       └── pids/                    # Worker PIDs (created at runtime)
+│           ├── Stream-A.pid
+│           ├── Stream-B.pid
+│           └── Stream-C.pid
+└── watch-status                     # Symlink → .claude/orchestrator/watch-status
+```
+
+### Component Descriptions
+
+| File | Purpose | Language |
+|------|---------|----------|
+| `orchestrate.py` | Main orchestration controller - spawns workers, manages lifecycle, resolves dependencies | Python |
+| `task_copilot_client.py` | Clean abstraction layer for Task Copilot SQLite database with typed dataclasses | Python |
+| `check_streams_data.py` | Data fetcher that outputs parseable format for bash scripts | Python |
+| `check-streams` | Status dashboard with compact single-line stream display | Bash |
+| `watch-status` | Wrapper script for live monitoring with configurable refresh interval | Bash |
+| `ORCHESTRATION_GUIDE.md` | Complete documentation (copy of this guide) | Markdown |
 
 ---
 
@@ -175,7 +229,7 @@ Data: Task Copilot │ 3 workers │ 16:42:11
 
 ### orchestrate.py start
 
-Start all streams, respecting phase dependencies:
+Start all streams, respecting dependencies dynamically:
 
 ```bash
 # Start all streams
@@ -187,11 +241,12 @@ python orchestrate.py start Stream-B
 
 **Behavior:**
 
-- Foundation streams start first, run sequentially
-- Parallel streams start after foundation completes, run concurrently
-- Integration streams start after parallel completes
+- Streams with no dependencies start immediately
+- Streams start when ALL dependencies are 100% complete
+- Independent streams run in parallel
 - Workers auto-restart on failure (max 10 attempts)
-- Process runs in foreground, Ctrl+C to stop
+- Process runs in foreground, Ctrl+C to stop orchestrator
+- Workers continue running after orchestrator exits (use `stop` to kill them)
 
 ### orchestrate.py status
 
@@ -266,6 +321,65 @@ Press Ctrl+C to stop monitoring.
 
 ---
 
+## Key Features
+
+### Initiative-Scoped Stream Filtering
+
+Streams are automatically filtered to show only those belonging to the current initiative:
+
+- Queries Memory Copilot for active initiative ID
+- Filters Task Copilot streams by `initiative_id`
+- Shows appropriate empty states:
+  - `NO_INITIATIVE` - No active initiative found
+  - `NO_ACTIVE_STREAMS` - All streams in current initiative complete
+  - `NO_DATABASE` - Task Copilot not initialized
+
+### Runtime Tracking
+
+Each stream shows elapsed time since the worker started:
+
+```
+Stream-A [===============] 100%  ✓  7        DONE  2h31m  Foundation
+Stream-B [==========-----]  70%  ✓  7  ⚙ 1  RUN   1h45m  API Layer
+```
+
+- Runtime extracted from "Started:" timestamp in worker log files
+- Format: `<1m`, `45m`, `2h31m`, `1d4h`
+- Cyan for running streams, dimmed for completed
+
+### Agent Assignment Pre-flight Check
+
+Before starting workers, the orchestrator checks for tasks assigned to non-'me' agents:
+
+```
+[WARNING] Found 3 task(s) assigned to non-'me' agents:
+
+  Stream-A:
+    • Set up database schema... → @ta
+    • Write API documentation... → @doc
+
+[WARNING] Workers run as @agent-me and will SKIP these tasks.
+
+  [r] Reassign all to 'me' and continue
+  [c] Continue anyway (tasks will be skipped)
+  [a] Abort
+
+  Choice [r/c/a]:
+```
+
+This prevents workers from silently skipping tasks they can't execute.
+
+### Dynamic Dependency Resolution
+
+No hardcoded phases - stream execution order determined entirely by the dependency graph:
+
+- Streams with empty `dependencies: []` start immediately (foundation)
+- Streams start when ALL dependencies reach 100% complete
+- Independent streams run in parallel automatically
+- Circular dependencies detected and reported
+
+---
+
 ## How It Works
 
 ### Runtime Stream Query
@@ -273,17 +387,26 @@ Press Ctrl+C to stop monitoring.
 Unlike static configuration, the orchestrator queries Task Copilot at runtime:
 
 ```python
-# Query streams from SQLite
-cursor.execute("""
-    SELECT DISTINCT
-        json_extract(metadata, '$.streamId') as stream_id,
-        json_extract(metadata, '$.streamName') as stream_name,
-        json_extract(metadata, '$.streamPhase') as stream_phase
-    FROM tasks
-    WHERE json_extract(metadata, '$.streamId') IS NOT NULL
-      AND archived = 0
-    ORDER BY stream_phase, stream_id
-""")
+# Query streams from SQLite using Task Copilot client
+stream_infos = tc_client.stream_list()
+
+# Each stream includes:
+# - stream_id: Unique identifier (e.g., "Stream-A")
+# - stream_name: Human-readable name
+# - dependencies: Array of streamIds (e.g., ["Stream-A", "Stream-B"])
+```
+
+**SQL query executed by client:**
+
+```sql
+SELECT DISTINCT
+    json_extract(metadata, '$.streamId') as stream_id,
+    json_extract(metadata, '$.streamName') as stream_name,
+    json_extract(metadata, '$.dependencies') as dependencies
+FROM tasks
+WHERE json_extract(metadata, '$.streamId') IS NOT NULL
+  AND archived = 0
+ORDER BY stream_id
 ```
 
 **Benefits:**
@@ -292,6 +415,7 @@ cursor.execute("""
 - Always reflects current Task Copilot state
 - Stream changes automatically picked up
 - Single source of truth (Task Copilot database)
+- Dependencies defined per-task, not in orchestrator
 
 ### Headless Worker Spawning
 
@@ -358,43 +482,71 @@ if not self._is_running(stream_id):
 
 Workers automatically restart up to 10 times on failure.
 
-### Phase Management
+### Dynamic Dependency Management
 
-**Foundation Phase:**
+**No Hardcoded Phases** - execution order is determined entirely by task metadata.
 
-```python
-# Start foundation streams first
-for stream in foundation:
-    self.spawn_worker(stream["id"], wait_for_deps=False)
-
-# Wait for foundation to complete
-self._wait_for_streams([s["id"] for s in foundation])
-```
-
-Foundation must complete 100% before parallel starts.
-
-**Parallel Phase:**
+**Dependency Graph Construction:**
 
 ```python
-# Start all parallel streams at once
-for stream in parallel:
-    self.spawn_worker(stream["id"])
+def _build_dependency_graph(self) -> Dict[str, Set[str]]:
+    dependency_graph: Dict[str, Set[str]] = defaultdict(set)
 
-# Monitor all streams
-self._wait_for_streams([s["id"] for s in parallel])
+    for stream_id, stream in self.streams.items():
+        dependencies = stream.get("dependencies", [])
+
+        for dep in dependencies:
+            if dep in self.streams:
+                dependency_graph[stream_id].add(dep)
+
+    return dependency_graph
 ```
 
-Parallel streams run concurrently.
-
-**Integration Phase:**
+**Dependency Depth Calculation:**
 
 ```python
-# Start after parallel complete
-for stream in integration:
-    self.spawn_worker(stream["id"])
+def _calculate_dependency_depth(self) -> Dict[str, int]:
+    depths: Dict[str, int] = {}
+    remaining = set(self.streams.keys())
+
+    while remaining:
+        ready = set()
+        for stream_id in remaining:
+            deps = self.stream_dependencies.get(stream_id, set())
+            if all(dep in depths for dep in deps):
+                ready.add(stream_id)
+
+        for stream_id in ready:
+            deps = self.stream_dependencies.get(stream_id, set())
+            if deps:
+                depths[stream_id] = max(depths[dep] for dep in deps) + 1
+            else:
+                depths[stream_id] = 0
+            remaining.remove(stream_id)
+
+    return depths
 ```
 
-Integration runs last, merges parallel work.
+**Continuous Polling Loop:**
+
+```python
+def start_all(self):
+    while True:
+        ready_streams = self._get_ready_streams()
+
+        for stream_id in ready_streams:
+            self.spawn_worker(stream_id)
+
+        if all_complete:
+            break
+
+        time.sleep(POLL_INTERVAL)  # 30 seconds
+```
+
+**Stream is ready when:**
+1. All dependencies have 100% of tasks completed
+2. Stream is not already running
+3. Stream is not already complete
 
 ### Worker Prompt
 
@@ -761,13 +913,28 @@ For orchestration to work, tasks must have:
 {
   "metadata": {
     "streamId": "Stream-B",
-    "streamName": "api-implementation",
-    "streamPhase": "parallel"
+    "streamName": "API Implementation",
+    "dependencies": ["Stream-A"]
   }
 }
 ```
 
+**Required fields:**
+- `streamId` - Unique identifier (e.g., "Stream-A", "Foundation-Core")
+- `dependencies` - Array of streamIds (use `[]` for no dependencies)
+
+**Optional fields:**
+- `streamName` - Human-readable name (defaults to streamId if not provided)
+
 **Set by @agent-ta when creating PRD.**
+
+**Dependency examples:**
+
+| Pattern | Example | Meaning |
+|---------|---------|---------|
+| No dependencies | `"dependencies": []` | Starts immediately |
+| Single dependency | `"dependencies": ["Stream-A"]` | Waits for Stream-A |
+| Multiple dependencies | `"dependencies": ["Stream-A", "Stream-B"]` | Waits for both (AND logic) |
 
 ### Querying Streams
 
@@ -777,11 +944,11 @@ The orchestrator queries:
 SELECT DISTINCT
     json_extract(metadata, '$.streamId') as stream_id,
     json_extract(metadata, '$.streamName') as stream_name,
-    json_extract(metadata, '$.streamPhase') as stream_phase
+    json_extract(metadata, '$.dependencies') as dependencies
 FROM tasks
 WHERE json_extract(metadata, '$.streamId') IS NOT NULL
   AND archived = 0
-ORDER BY stream_phase, stream_id
+ORDER BY stream_id
 ```
 
 **Archived streams are excluded** - only active streams are orchestrated.

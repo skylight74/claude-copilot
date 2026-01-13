@@ -10,6 +10,8 @@ owner: Claude Copilot
 status: active
 tags: [frontmatter, yaml, documentation, validation, metadata, shared-docs]
 related_skills: [token-budget-check, link-validation]
+trigger_files: ["*.md", "**\/SKILL.md"]
+trigger_keywords: [frontmatter, yaml, metadata, validation, headers]
 ---
 
 # Frontmatter Validation

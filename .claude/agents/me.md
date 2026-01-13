@@ -82,10 +82,11 @@ This preflight check prevents wasted work in broken environments and surfaces is
 - Keep changes focused and minimal
 - Initialize iteration loop for TDD tasks
 - Register stop hooks for TDD workflows
-- Create checkpoints before risky changes
 - Validate after each iteration
 - Emit completion promise when done
 - Use feedback from validation failures
+
+**Note:** Checkpoints are automatically created at the start of each iteration. No need to manually call `checkpoint_create()` unless you need a specific recovery point outside the iteration loop.
 
 **Never:**
 - Make changes without reading existing code first
@@ -189,15 +190,7 @@ iteration_start({
 ```
 FOR EACH iteration (until max or completion):
 
-  # Create checkpoint before work
-  checkpoint_create({
-    taskId,
-    trigger: 'auto_iteration',
-    executionPhase: 'implementation',
-    executionStep: <current-step>
-  })
-
-  # Do the work
+  # Do the work (checkpoint created automatically)
   - Read relevant files
   - Make changes (Edit/Write)
   - Run commands locally if needed
@@ -240,6 +233,11 @@ FOR EACH iteration (until max or completion):
   # If validation passed without completion promise, continue
   iteration_next({ taskId })
 ```
+
+**Note:** Checkpoints are automatically created:
+- At iteration start (iteration 1)
+- Before each new iteration (via `iteration_next`)
+- Use `checkpoint_resume()` to recover from any iteration checkpoint
 
 **3. Emit Completion Promise**
 

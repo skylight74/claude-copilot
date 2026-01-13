@@ -240,7 +240,8 @@ For now, use hardcoded defaults: 85% of 4096 tokens.
      taskId,
      type: "security_review",
      title: "Security Review: [Component]",
-     content: "Full findings with severity and remediation"
+     content: "Full findings with severity and remediation",
+     confidence: 0.9  // Optional: 0-1 scale for vulnerability certainty
    })
 4. task_update({ id: taskId, status: "completed", notes: "Brief summary" })
 ```
@@ -257,6 +258,25 @@ Next Steps: <what needs remediation>
 ```
 
 **NEVER return full security findings to the main session.**
+
+## Confidence Scoring
+
+When storing security findings, include a `confidence` score (0-1) to indicate vulnerability certainty:
+
+| Confidence | When to Use | Example |
+|------------|-------------|---------|
+| **0.9-1.0** | Confirmed vulnerability with exploit proof | "SQL injection confirmed with working exploit" |
+| **0.7-0.89** | High likelihood vulnerability with clear evidence | "XSS possible, user input unescaped in output" |
+| **0.5-0.69** | Potential vulnerability, needs confirmation | "Authentication bypass suspected, needs testing" |
+| **0.3-0.49** | Security concern, unclear if exploitable | "Weak crypto algorithm used, impact unclear" |
+| **0.0-0.29** | Possible issue, likely false positive | "Rate limiting missing, might be handled upstream" |
+| **null** | Confidence not applicable | Best practices recommendations, informational |
+
+**Guidelines:**
+- Use high confidence (0.8+) for confirmed vulnerabilities with clear exploitability
+- Use medium confidence (0.5-0.79) for likely vulnerabilities pending proof of concept
+- Use low confidence (<0.5) for theoretical issues or unclear exploitability
+- Omit confidence (null) for best practice recommendations without specific vulnerabilities
 
 ## Route To Other Agent
 

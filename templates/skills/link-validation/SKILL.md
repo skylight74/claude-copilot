@@ -10,6 +10,8 @@ owner: Claude Copilot
 status: active
 tags: [links, documentation, validation, shared-docs, cross-references]
 related_skills: [token-budget-check, frontmatter-validation]
+trigger_files: ["*.md", "**\/docs/**\/*.md"]
+trigger_keywords: [links, broken-links, validation, cross-reference, anchor, markdown-links]
 ---
 
 # Link Validation

@@ -18,6 +18,7 @@ import {
 
 import { SkillsMPProvider, PostgresProvider, CacheProvider, LocalProvider, KnowledgeRepoProvider } from './providers/index.js';
 import type { SkillsHubConfig, Skill, SkillMeta, SkillMatch, SkillSource, SkillSaveParams, ResolvedExtension, ExtensionListItemWithSource, KnowledgeRepoStatus, KnowledgeRepoConfig, KnowledgeSearchResult, KnowledgeSearchOptions } from './types.js';
+import { detectTriggeredSkills, formatTriggerMatches } from './triggers.js';
 
 // Configuration from environment
 const config: SkillsHubConfig = {
@@ -153,6 +154,28 @@ const TOOLS = [
         clearCache: {
           type: 'boolean',
           description: 'Clear cache before re-scanning (default: false)'
+        }
+      }
+    }
+  },
+  {
+    name: 'skill_auto_detect',
+    description: 'Auto-detect skills based on file patterns and keywords in context. Returns skills whose triggers match the provided context.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File paths to analyze for trigger patterns (e.g., ["src/test.spec.ts", "README.md"])'
+        },
+        text: {
+          type: 'string',
+          description: 'Text content to analyze for trigger keywords (e.g., conversation or file content)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of skills to return (default: 5)'
         }
       }
     }
@@ -601,6 +624,47 @@ Consider: Main skill + helper skills pattern`
           output += '- ~/.claude/skills\n\n';
           output += 'Add SKILL.md files to these directories for auto-discovery.';
         }
+
+        return {
+          content: [{ type: 'text', text: output }]
+        };
+      }
+
+      case 'skill_auto_detect': {
+        const files = a.files as string[] | undefined;
+        const text = a.text as string | undefined;
+        const limit = a.limit as number | undefined || 5;
+
+        if (!files && !text) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Must provide either "files" or "text" parameter for trigger detection.'
+            }],
+            isError: true
+          };
+        }
+
+        // Get all skill triggers
+        const triggers = local.getAllTriggers();
+
+        if (triggers.size === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'No skills have trigger definitions. Add trigger_files or trigger_keywords to SKILL.md frontmatter.'
+            }]
+          };
+        }
+
+        // Detect triggered skills
+        const matches = detectTriggeredSkills(
+          { files, text },
+          triggers
+        );
+
+        // Format and return results
+        const output = formatTriggerMatches(matches, limit);
 
         return {
           content: [{ type: 'text', text: output }]

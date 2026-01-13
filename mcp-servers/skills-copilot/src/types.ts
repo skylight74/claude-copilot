@@ -28,6 +28,17 @@ export interface SkillMeta {
   author?: string;
   source: SkillSource;
   stars?: number;
+  triggers?: SkillTriggers;
+}
+
+/**
+ * Trigger definitions for context-based skill auto-invocation
+ */
+export interface SkillTriggers {
+  /** File patterns that trigger this skill (glob-like: *.test.ts, **\/spec.js) */
+  files?: string[];
+  /** Keywords in context that trigger this skill */
+  keywords?: string[];
 }
 
 export interface SkillMatch extends SkillMeta {

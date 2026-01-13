@@ -13,6 +13,7 @@ import { runSafetyChecks } from './iteration-guards.js';
 import { validateIterationConfigOrThrow } from '../validation/iteration-config-validator.js';
 import { evaluateStopHooks, getTaskHooks } from './stop-hooks.js';
 import { detectIncompleteStop, decideContinuation } from './continuation-guard.js';
+import { getAutoCheckpointHooks } from '../hooks/auto-checkpoint.js';
 
 // ============================================================================
 // INPUT/OUTPUT TYPES
@@ -171,6 +172,12 @@ export function iterationStart(
     completion_promises: JSON.stringify(input.completionPromises),
     validation_state: null
   });
+
+  // Trigger auto-checkpoint hook for iteration start
+  const hooks = getAutoCheckpointHooks();
+  if (hooks) {
+    hooks.onIterationStart(input.taskId, 1);
+  }
 
   return {
     iterationId,
@@ -471,6 +478,12 @@ export function iterationNext(
     JSON.stringify(history),
     checkpoint.validation_state
   );
+
+  // Trigger auto-checkpoint hook for next iteration
+  const hooks = getAutoCheckpointHooks();
+  if (hooks) {
+    hooks.onIterationStart(checkpoint.task_id, nextIteration);
+  }
 
   return {
     iterationId: input.iterationId,

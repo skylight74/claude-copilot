@@ -25,8 +25,10 @@ claude
 
 The setup wizard will:
 - Check prerequisites (Node.js, build tools)
-- Build the MCP servers (Memory, Skills, Task)
+- Build the MCP servers (Memory, Task; Skills optional)
 - Install global commands (`/setup-project`, `/update-project`, `/knowledge-copilot`)
+
+**Note:** Skills Copilot MCP is optional. For local skills, use native `@include` directives.
 
 ### Step 4: Set Up Projects
 
@@ -75,12 +77,14 @@ This creates a knowledge repository for company/product information that's share
 
 | Component | Purpose |
 |-----------|---------|
-| `mcp-servers/copilot-memory/` | Persistent memory across sessions |
-| `mcp-servers/skills-copilot/` | On-demand skill loading + knowledge search |
-| `mcp-servers/task-copilot/` | PRD, task, and work product storage |
+| `mcp-servers/copilot-memory/` | Persistent memory across sessions (required) |
+| `mcp-servers/skills-copilot/` | OPTIONAL: Advanced skill management + marketplace access |
+| `mcp-servers/task-copilot/` | PRD, task, and work product storage (required) |
 | `.claude/agents/` | 12 specialized agent definitions |
 | `.claude/commands/` | Source command files |
 | `templates/` | Project setup templates |
+
+**Skills Note:** For local skills (`.claude/skills/`), use native `@include` directives. Only build Skills Copilot MCP if you need SkillsMP marketplace (25K+ skills) or private database storage.
 
 ### User Level (`~/.claude/commands/`)
 
@@ -128,19 +132,23 @@ xcode-select --install
 
 ### Build MCP Servers
 
+**Required servers:**
 ```bash
-# Memory server
+# Memory server (required)
 cd ~/.claude/copilot/mcp-servers/copilot-memory
 npm install
 npm run build
 
-# Skills server
-cd ~/.claude/copilot/mcp-servers/skills-copilot
+# Task server (required)
+cd ~/.claude/copilot/mcp-servers/task-copilot
 npm install
 npm run build
+```
 
-# Task server
-cd ~/.claude/copilot/mcp-servers/task-copilot
+**Optional - Skills Copilot (only if you need marketplace/database):**
+```bash
+# Skills server (optional - skip if using native @include)
+cd ~/.claude/copilot/mcp-servers/skills-copilot
 npm install
 npm run build
 ```
@@ -170,6 +178,8 @@ cp ~/.claude/copilot/.claude/commands/knowledge-copilot.md ~/.claude/commands/
    ```
 
 3. Create `.mcp.json` (replace `/Users/yourname` with actual path):
+
+   **Minimal (native @include for skills):**
    ```json
    {
      "mcpServers": {
@@ -179,13 +189,6 @@ cp ~/.claude/copilot/.claude/commands/knowledge-copilot.md ~/.claude/commands/
          "env": {
            "MEMORY_PATH": "/Users/yourname/.claude/memory",
            "WORKSPACE_ID": "your-project-name"
-         }
-       },
-       "skills-copilot": {
-         "command": "node",
-         "args": ["/Users/yourname/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
-         "env": {
-           "LOCAL_SKILLS_PATH": "./.claude/skills"
          }
        },
        "task-copilot": {
@@ -200,6 +203,17 @@ cp ~/.claude/copilot/.claude/commands/knowledge-copilot.md ~/.claude/commands/
    }
    ```
 
+   **Optional - Add Skills Copilot (if you need marketplace/database):**
+   ```json
+       "skills-copilot": {
+         "command": "node",
+         "args": ["/Users/yourname/.claude/copilot/mcp-servers/skills-copilot/dist/index.js"],
+         "env": {
+           "LOCAL_SKILLS_PATH": "./.claude/skills"
+         }
+       }
+   ```
+
 4. Create `CLAUDE.md` from template at `~/.claude/copilot/templates/CLAUDE.template.md`
 
 5. Restart Claude Code
@@ -208,12 +222,20 @@ cp ~/.claude/copilot/.claude/commands/knowledge-copilot.md ~/.claude/commands/
 
 ## Verification
 
-After setup, run `/mcp` in Claude Code. You should see:
+After setup, run `/mcp` in Claude Code. You should see at minimum:
 ```
 ● copilot-memory
-● skills-copilot
 ● task-copilot
 ```
+
+Optional (if configured):
+```
+● skills-copilot
+```
+
+**Using Skills:**
+- **Local skills:** Use `@include .claude/skills/NAME/SKILL.md` in prompts
+- **Marketplace skills:** Install Skills Copilot MCP, then use `skill_search()`
 
 Then try:
 - `/protocol` - Start working
@@ -255,15 +277,17 @@ npm run build
 | `MEMORY_PATH` | `~/.claude/memory` | Database storage location |
 | `WORKSPACE_ID` | Auto-hash | Unique project identifier |
 
-### Skills Copilot
+### Skills Copilot (OPTIONAL)
+
+**Note:** Only needed if using Skills Copilot MCP. For local skills, use native `@include` directives.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `LOCAL_SKILLS_PATH` | `./.claude/skills` | Project skills |
-| `SKILLSMP_API_KEY` | - | Access to 25K+ public skills |
-| `POSTGRES_URL` | - | Team-shared private skills |
-| `KNOWLEDGE_REPO_PATH` | - | Project-specific knowledge |
-| `GLOBAL_KNOWLEDGE_PATH` | `~/.claude/knowledge` | Machine-wide knowledge |
+| `LOCAL_SKILLS_PATH` | `./.claude/skills` | Project skills (fallback) |
+| `SKILLSMP_API_KEY` | - | Access to 25K+ public skills marketplace |
+| `POSTGRES_URL` | - | Team-shared private skills in database |
+| `KNOWLEDGE_REPO_PATH` | - | Project-specific knowledge repository |
+| `GLOBAL_KNOWLEDGE_PATH` | `~/.claude/knowledge` | Machine-wide knowledge (auto-detected) |
 
 ### Task Copilot
 

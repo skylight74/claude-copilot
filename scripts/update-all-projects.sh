@@ -65,7 +65,7 @@ for PROJECT in "${PROJECTS[@]}"; do
     cp "$COPILOT_PATH/.claude/commands/map.md" "$PROJECT/.claude/commands/" 2>/dev/null
     cp "$COPILOT_PATH/.claude/commands/memory.md" "$PROJECT/.claude/commands/" 2>/dev/null
     cp "$COPILOT_PATH/.claude/commands/extensions.md" "$PROJECT/.claude/commands/" 2>/dev/null
-    cp "$COPILOT_PATH/.claude/commands/orchestration.md" "$PROJECT/.claude/commands/" 2>/dev/null
+    cp "$COPILOT_PATH/.claude/commands/orchestrate.md" "$PROJECT/.claude/commands/" 2>/dev/null
 
     # Update agents (all 12+ agents)
     cp "$COPILOT_PATH/.claude/agents/"*.md "$PROJECT/.claude/agents/" 2>/dev/null
