@@ -89,7 +89,15 @@ Assistant: [Invokes @agent-ta to create PRD and tasks]
 When user runs `/orchestrate generate`:
 
 1. **Prompt for feature name** if not provided as argument
-2. **Invoke @agent-ta** with this prompt:
+
+2. **Link to Memory Copilot initiative (REQUIRED FIRST):**
+   - Call `initiative_link({ initiativeId, title, description })` to:
+     - Establish current initiative in Task Copilot
+     - Auto-archive old streams from previous initiatives (clean slate)
+     - Prevent stream pollution from prior work
+   - If initiative not found, return error asking user to start initiative in Memory Copilot first
+
+3. **Invoke @agent-ta** with this prompt:
    ```
    Create a PRD and task breakdown for parallel orchestration.
 
@@ -121,8 +129,119 @@ When user runs `/orchestrate generate`:
    5. Display dependency structure visualization
    6. Return "Ready for /orchestrate start"
    ```
-3. **Validate @agent-ta created proper metadata** - if validation fails, report errors
-4. **Display success message** with stream structure and next steps
+
+4. **VERIFY Task Copilot State (MANDATORY - DO NOT SKIP):**
+
+   After @agent-ta returns, you MUST verify that tools were actually called:
+
+   a. **Check PRDs exist:**
+      ```
+      Call: prd_list({})
+      Expected: At least 1 PRD returned
+      ```
+
+   b. **Check streams exist:**
+      ```
+      Call: stream_list({})
+      Expected: At least 1 stream returned
+      ```
+
+   c. **If EITHER check returns empty:**
+
+      Display error and STOP:
+      ```
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ❌ ERROR: Verification Failed
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+      @agent-ta did not properly use Task Copilot tools.
+
+      Verification Results:
+        • PRDs found: {count}
+        • Streams found: {count}
+
+      The agent may have:
+        • Output a planning document instead of calling tools
+        • Skipped prd_create() or task_create() calls
+        • Failed to include metadata.streamId in tasks
+        • Created content but not stored it in Task Copilot
+
+      Would you like to retry with explicit tool enforcement? [y/n]
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ```
+
+      **If user says yes, re-invoke @agent-ta with STRONGER prompt:**
+      ```
+      CRITICAL: Previous attempt did not use Task Copilot tools.
+
+      You MUST call these tools - do NOT output markdown documents:
+
+      1. prd_create({ title, description, acceptanceCriteria, ... })
+         → Returns PRD-xxx ID - USE THIS ID for all tasks
+
+      2. task_create({ prdId: "PRD-xxx", title, description, metadata: {...} })
+         → Call multiple times, once per task
+         → MUST include metadata.streamId in EVERY task
+         → MUST include metadata.dependencies array
+
+      3. After all tool calls, verify:
+         → Call prd_list({}) and confirm PRD exists
+         → Call stream_list({}) and confirm streams exist
+         → If either is empty, you did NOT call the tools
+
+      Feature: {feature_description}
+
+      {rest of original prompt}
+      ```
+
+      **If user says no, exit and report failure.**
+
+   d. **If verification PASSES (both have results):**
+      - Continue to display success message with stream structure
+      - Proceed to step 5 below
+
+5. **Create Orchestrator Files:**
+
+   After verification passes, set up the orchestrator infrastructure:
+
+   a. **Create directory:**
+      ```bash
+      mkdir -p .claude/orchestrator
+      ```
+
+   b. **Copy template files from framework:**
+      - `task_copilot_client.py` - Task Copilot data abstraction layer
+      - `check_streams_data.py` - Stream data fetcher for bash scripts
+      - `check-streams` - Live status dashboard (with dynamic workspace detection)
+      - `watch-status` - Wrapper for live status updates
+      - `orchestrate.py` - Main orchestration script with dynamic dependencies
+      - `ORCHESTRATION_GUIDE.md` - Full documentation
+
+   c. **Replace workspace placeholder:**
+      - In `check-streams` file, replace `WORKSPACE_ID="insights-copilot"` with dynamic detection
+
+   d. **Make scripts executable:**
+      ```bash
+      chmod +x .claude/orchestrator/check-streams
+      chmod +x .claude/orchestrator/watch-status
+      ```
+
+   e. **Create symlink at project root:**
+      ```bash
+      ln -sf .claude/orchestrator/watch-status watch-status
+      ```
+
+   f. **Display creation confirmation:**
+      ```
+      ✓ Orchestrator files created in .claude/orchestrator/
+      ✓ Symlink created: ./watch-status
+      ```
+
+6. **Display success message** with:
+   - PRD ID created
+   - Number of streams and tasks
+   - Dependency structure visualization
+   - Next step: "Run `/orchestrate start` to begin execution"
 
 ---
 
@@ -130,9 +249,39 @@ When user runs `/orchestrate generate`:
 
 **Single command that handles everything:**
 
-**Pre-flight Validation (ALWAYS runs first):**
+**File Verification (ALWAYS runs first):**
 
-Before setting up or starting orchestration, validate Task Copilot has proper stream data:
+Before any validation or execution, verify orchestrator files exist:
+
+1. **Check required files exist:**
+   - `.claude/orchestrator/orchestrate.py`
+   - `.claude/orchestrator/task_copilot_client.py`
+   - `.claude/orchestrator/check_streams_data.py`
+   - `.claude/orchestrator/check-streams`
+   - `.claude/orchestrator/watch-status`
+
+2. **If any files are missing:**
+   ```
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ❌ ERROR: Orchestrator Files Not Found
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+   Missing required orchestrator files.
+
+   Run `/orchestrate generate` first to:
+     1. Create PRD and tasks in Task Copilot
+     2. Set up orchestrator infrastructure
+     3. Create worker scripts and symlinks
+
+   Then run `/orchestrate start` to spawn workers.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ```
+
+   **STOP - Do NOT create files, do NOT proceed to validation.**
+
+**Pre-flight Validation (runs after file verification):**
+
+After verifying files exist, validate Task Copilot has proper stream data:
 
 1. **Check streams exist** - Query Task Copilot for tasks with `metadata.streamId`
 2. **Check foundation exists** - At least one stream must have `dependencies: []`
@@ -156,30 +305,9 @@ Run `/orchestrate generate` first to create PRD and tasks with stream metadata.
 
 ---
 
-**First Run (nothing exists):**
-1. Creates `.claude/orchestrator/` directory in project root
-2. Copies template files from framework:
-   - `task_copilot_client.py` - Task Copilot data abstraction layer
-   - `check_streams_data.py` - Stream data fetcher for bash scripts
-   - `check-streams` - Live status dashboard (with dynamic workspace detection)
-   - `watch-status` - Wrapper for live status updates
-   - `orchestrate.py` - Main orchestration script with dynamic dependencies
-3. Creates symlink: `./watch-status` → `.claude/orchestrator/watch-status`
-4. Makes scripts executable (`chmod +x`)
-5. Then starts orchestration
+**Execution (after verification passes):**
 
-**Subsequent Runs (files exist):**
-1. Validates all required files are present and correct:
-   - `orchestrate.py`
-   - `task_copilot_client.py`
-   - `check_streams_data.py`
-   - `check-streams`
-   - `watch-status`
-2. Fixes any missing files (copies from templates)
-3. Fixes symlink if broken
-4. Then starts orchestration
-
-**Runs the orchestration system:**
+After file and stream validation passes, start the orchestration system:
 ```bash
 python .claude/orchestrator/orchestrate.py start
 ```
@@ -336,43 +464,49 @@ When user runs `/orchestrate [command]`:
 
 2. **For `generate`:**
    - **Prompt for feature** if not provided as argument
+   - **Link initiative** via `initiative_link()` (see detailed steps in `/orchestrate generate` section above)
    - **Invoke @agent-ta** with orchestration generation prompt (see `/orchestrate generate` section above)
    - **Wait for @agent-ta** to create PRD and tasks in Task Copilot
-   - **Validate creation:**
-     - Query Task Copilot for tasks with `metadata.streamId`
-     - Verify at least one stream has `dependencies: []`
-     - Verify no circular dependencies
+   - **VERIFY creation (MANDATORY):**
+     - Call `prd_list({})` to verify PRDs exist
+     - Call `stream_list({})` to verify streams exist
+     - **If either is empty:** Display error, offer retry with stronger prompt
+     - **If both have results:** Proceed to create files
+   - **CREATE Orchestrator Files (AFTER verification passes):**
+     - Create `.claude/orchestrator/` directory
+     - Copy template files from `~/.claude/copilot/templates/orchestration/`:
+       - `orchestrate.py` - Main orchestration script
+       - `task_copilot_client.py` - Task Copilot data abstraction
+       - `check_streams_data.py` - Stream data fetcher
+       - `check-streams` - Status dashboard script
+       - `watch-status` - Live monitoring wrapper
+       - `ORCHESTRATION_GUIDE.md` - Documentation
+     - Make scripts executable: `chmod +x check-streams watch-status`
+     - Create project root symlink: `ln -sf .claude/orchestrator/watch-status watch-status`
    - **Display results:**
      - PRD ID created
      - Number of streams and tasks
      - Dependency structure visualization
+     - Files created confirmation
      - Next step: "Run `/orchestrate start` to begin execution"
 
 3. **For `start`:**
-   - **Pre-flight Validation (REQUIRED):**
+   - **File Verification (REQUIRED - runs first):**
+     - Check if all required files exist:
+       - `.claude/orchestrator/orchestrate.py`
+       - `.claude/orchestrator/task_copilot_client.py`
+       - `.claude/orchestrator/check_streams_data.py`
+       - `.claude/orchestrator/check-streams`
+       - `.claude/orchestrator/watch-status`
+     - **If any files missing:** Display error box directing user to run `/orchestrate generate` first
+     - **CRITICAL: Do NOT create files - only verify they exist**
+     - **If missing, STOP and direct user to `/orchestrate generate`**
+   - **Pre-flight Validation (runs after file verification):**
      - Query Task Copilot for tasks with `metadata.streamId`
      - **If no streams found:** ERROR - direct user to run `/orchestrate generate` first
      - Verify at least one foundation stream exists (empty dependencies)
      - Verify no circular dependencies in graph
-   - **Setup Phase:**
-     - Detect project root (current working directory)
-     - Check if `.claude/orchestrator/` directory exists
-     - Check if all required files exist:
-       - `orchestrate.py`
-       - `task_copilot_client.py`
-       - `check_streams_data.py`
-       - `check-streams`
-       - `watch-status`
-     - Check if symlink `./watch-status` exists at project root
-     - **If directory missing:** Create `.claude/orchestrator/`
-     - **If any files missing or broken:**
-       - Copy all template files from `{framework_root}/templates/orchestration/`
-       - Replace `WORKSPACE_ID="insights-copilot"` with dynamic detection in `check-streams`
-       - Make scripts executable (`chmod +x`)
-       - Copy ORCHESTRATION_GUIDE.md
-     - **If symlink missing or broken:**
-       - Create symlink: `watch-status` → `.claude/orchestrator/watch-status`
-   - **Execution Phase:**
+   - **Execution Phase (only if all verification passes):**
      - Display dependency structure before starting
      - Run `python .claude/orchestrator/orchestrate.py start`
      - Show output in real-time
