@@ -74,6 +74,19 @@ class Orchestrator:
         # Initialize Task Copilot client
         self.tc_client = TaskCopilotClient(WORKSPACE_ID)
 
+        # Require active initiative
+        self.initiative_id = self.tc_client.get_active_initiative_id()
+        if not self.initiative_id:
+            error("No active initiative found. Start an initiative with /protocol first.")
+            sys.exit(1)
+
+        # Get initiative details for display
+        self.initiative_details = self.tc_client.get_initiative_details(self.initiative_id)
+        if self.initiative_details:
+            log(f"Initiative: {self.initiative_details.name}")
+            if self.initiative_details.goal:
+                log(f"Goal: {self.initiative_details.goal[:100]}")
+
         self.streams = self._query_streams()
         self.stream_dependencies = self._build_dependency_graph()
         self.dependency_depth = self._calculate_dependency_depth()
@@ -83,13 +96,17 @@ class Orchestrator:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         PID_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Clean up stale PID files from previous runs
+        self._cleanup_stale_pids()
+
     def _query_streams(self) -> Dict[str, dict]:
         """Query streams dynamically using Task Copilot client."""
         try:
-            stream_infos = self.tc_client.stream_list()
+            # Filter streams by initiative
+            stream_infos = self.tc_client.stream_list(initiative_id=self.initiative_id)
 
             if not stream_infos:
-                error("No streams found in Task Copilot database")
+                error(f"No streams found for initiative {self.initiative_id}")
                 sys.exit(1)
 
             streams = {}
@@ -183,7 +200,8 @@ class Orchestrator:
     def _get_stream_status(self, stream_id: str) -> Optional[dict]:
         """Get stream status using Task Copilot client."""
         try:
-            progress = self.tc_client.stream_get(stream_id)
+            # Filter by initiative
+            progress = self.tc_client.stream_get(stream_id, initiative_id=self.initiative_id)
             if not progress:
                 return None
 
@@ -263,6 +281,45 @@ class Orchestrator:
 
         return blocked
 
+    def _get_dead_workers(self) -> List[str]:
+        """Detect workers that died with incomplete tasks.
+
+        Returns list of stream_ids where:
+        - Worker was previously running (PID file exists or existed)
+        - Process is now dead
+        - Tasks are not complete
+        - Dependencies are satisfied (was ready to run)
+        """
+        dead_workers = []
+
+        for stream_id in self.streams.keys():
+            # Skip if currently running
+            if self._is_running(stream_id):
+                continue
+
+            # Skip if complete
+            status = self._get_stream_status(stream_id)
+            if status and status["is_complete"]:
+                continue
+
+            # Skip if dependencies not met (wasn't ready yet)
+            if not self._are_dependencies_complete(stream_id):
+                continue
+
+            # Check if there's evidence of prior execution
+            # (log file exists with content, indicating worker started)
+            log_file = self._get_log_file(stream_id)
+            if log_file.exists() and log_file.stat().st_size > 100:
+                # Worker ran but died - has incomplete tasks
+                # Check if there's at least one in_progress or we had progress
+                if status and (status["completed_tasks"] > 0 or status["in_progress_tasks"] > 0):
+                    dead_workers.append(stream_id)
+                elif status and status["total_tasks"] > 0:
+                    # Had tasks but no progress - likely died early
+                    dead_workers.append(stream_id)
+
+        return dead_workers
+
     def _preflight_check_agent_assignments(self) -> bool:
         """Pre-flight check for non-'me' agent assignments.
 
@@ -273,7 +330,7 @@ class Orchestrator:
             True if check passes (no issues or user chose to continue)
             False if user chose to abort
         """
-        non_me_tasks = self.tc_client.get_non_me_agent_tasks()
+        non_me_tasks = self.tc_client.get_non_me_agent_tasks(initiative_id=self.initiative_id)
 
         if not non_me_tasks:
             return True
@@ -330,7 +387,8 @@ class Orchestrator:
         return PID_DIR / f"{stream_id}.pid"
 
     def _get_log_file(self, stream_id: str) -> Path:
-        return LOG_DIR / f"{stream_id}.log"
+        """Get log file path using per-initiative naming."""
+        return LOG_DIR / f"{stream_id}_{self.initiative_id[:8]}.log"
 
     def _is_running(self, stream_id: str) -> bool:
         """Check if a stream worker is currently running."""
@@ -340,11 +398,33 @@ class Orchestrator:
 
         try:
             pid = int(pid_file.read_text().strip())
-            os.kill(pid, 0)  # Check if process exists
+            # Check if process exists with kill -0
+            os.kill(pid, 0)
+            # Double-check with ps to catch zombies (kill -0 succeeds for zombies)
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "pid="],
+                capture_output=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                # Process is zombie or doesn't exist
+                pid_file.unlink(missing_ok=True)
+                return False
             return True
-        except (ProcessLookupError, ValueError):
+        except (ProcessLookupError, ValueError, subprocess.TimeoutExpired):
             pid_file.unlink(missing_ok=True)
             return False
+
+    def _cleanup_stale_pids(self):
+        """Clean up stale PID files from workers that exited without cleanup."""
+        cleaned = 0
+        for pid_file in PID_DIR.glob("*.pid"):
+            stream_id = pid_file.stem
+            if not self._is_running(stream_id):
+                # _is_running already cleaned up the file if stale
+                cleaned += 1
+        if cleaned > 0:
+            log(f"Cleaned up {cleaned} stale PID file(s)")
 
     def _build_prompt(self, stream: dict) -> str:
         """Build the prompt for a Claude Code worker."""
@@ -449,31 +529,40 @@ Begin by querying your task list with task_list.
         log(f"  Working dir: {work_dir}")
 
         prompt = self._build_prompt(stream)
-        log_file = self._get_log_file(stream_id)
         pid_file = self._get_pid_file(stream_id)
+        wrapper_script = SCRIPT_DIR / "worker-wrapper.sh"
 
-        # Spawn Claude Code headlessly
-        with open(log_file, "a") as log_f:
-            log_f.write(f"\n{'='*60}\n")
-            log_f.write(f"Started: {datetime.now().isoformat()}\n")
-            log_f.write(f"Stream: {stream_id}\n")
-            log_f.write(f"Name: {stream['name']}\n")
-            log_f.write(f"Dependencies: {deps_str}\n")
-            log_f.write(f"{'='*60}\n\n")
+        # Spawn via wrapper script (handles PID cleanup, log archiving, per-initiative logs)
+        proc = subprocess.Popen(
+            [
+                str(wrapper_script),
+                stream_id,
+                str(pid_file),
+                str(LOG_DIR),  # Wrapper constructs per-initiative log filename
+                str(work_dir),
+                self.initiative_id,  # For per-initiative log naming
+                prompt
+            ],
+            start_new_session=True,  # Detach from parent
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
-            proc = subprocess.Popen(
-                ["claude", "--print", "--dangerously-skip-permissions", "-p", prompt],
-                cwd=work_dir,
-                stdout=log_f,
-                stderr=subprocess.STDOUT,
-                start_new_session=True  # Detach from parent
-            )
+        # Give wrapper a moment to write PID file
+        time.sleep(0.5)
 
-        # Save PID
-        pid_file.write_text(str(proc.pid))
+        # Read actual PID from file (wrapper's PID, not subprocess PID)
+        if pid_file.exists():
+            actual_pid = pid_file.read_text().strip()
+        else:
+            actual_pid = str(proc.pid)
+
         self.running_processes[stream_id] = proc
 
-        success(f"Worker {stream_id} started (PID: {proc.pid})")
+        # Log file uses per-initiative naming
+        log_file = LOG_DIR / f"{stream_id}_{self.initiative_id[:8]}.log"
+        success(f"Worker {stream_id} started (PID: {actual_pid})")
+        success(f"Logs: {log_file}")
         success(f"Logs: {log_file}")
         return True
 
@@ -497,6 +586,10 @@ Begin by querying your task list with task_list.
         # Track which streams we've attempted to start
         attempted = set()
 
+        # Track restart counts to prevent infinite loops
+        restart_counts: Dict[str, int] = defaultdict(int)
+        MAX_RESTARTS = 2
+
         # Main execution loop
         while True:
             # Find streams that are ready to start
@@ -512,6 +605,17 @@ Begin by querying your task list with task_list.
                     attempted.add(stream_id)
                     print()
 
+            # Check for dead workers that need restarting
+            dead_workers = self._get_dead_workers()
+            for stream_id in dead_workers:
+                if restart_counts[stream_id] < MAX_RESTARTS:
+                    restart_counts[stream_id] += 1
+                    warn(f"Worker {stream_id} died with incomplete tasks - restarting (attempt {restart_counts[stream_id]}/{MAX_RESTARTS})")
+                    self.spawn_worker(stream_id, wait_for_deps=False)
+                    print()
+                else:
+                    error(f"Worker {stream_id} failed {MAX_RESTARTS} times - marking as stuck")
+
             # Check if all streams are complete
             all_complete = True
             for stream_id in self.streams.keys():
@@ -522,6 +626,22 @@ Begin by querying your task list with task_list.
 
             if all_complete:
                 success("All streams complete!")
+                print()
+
+                # Archive streams for this initiative
+                log(f"Archiving streams for initiative {self.initiative_id}")
+                archived_count = self.tc_client.archive_initiative_streams(self.initiative_id)
+                success(f"Archived {archived_count} tasks")
+
+                # Mark initiative as complete
+                log("Marking initiative as complete")
+                if self.tc_client.complete_initiative(self.initiative_id):
+                    success("Initiative marked as COMPLETE")
+                else:
+                    warn("Failed to mark initiative as complete (Memory Copilot database may not be accessible)")
+
+                print()
+                success("Initiative complete - all streams archived")
                 break
 
             # Check if we're stuck (nothing ready, nothing running, not all complete)

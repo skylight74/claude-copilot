@@ -502,11 +502,136 @@ This creates clear separation between PRDs and makes orchestration status more r
 
 ---
 
+## Worker Chaining (Automatic Stream Starting)
+
+### Overview
+
+The `start-ready-streams.py` script enables automatic worker chaining - when a worker completes its tasks, it can trigger the start of dependent streams without waiting for the orchestrator's next polling cycle.
+
+This reduces latency between stream completions and dependent stream starts from up to 30 seconds (polling interval) down to near-instant.
+
+### How It Works
+
+```
+Worker A completes → Calls start-ready-streams.py --completed-stream Stream-A
+                  → Finds streams that depend on Stream-A
+                  → Checks if all dependencies are satisfied
+                  → Spawns workers for ready streams immediately
+```
+
+### Usage
+
+#### Manual Invocation
+
+Check and start any ready streams:
+```bash
+python .claude/orchestrator/start-ready-streams.py
+```
+
+Check streams that depend on a specific completed stream:
+```bash
+python .claude/orchestrator/start-ready-streams.py --completed-stream Stream-A
+```
+
+#### Automatic Invocation (Recommended)
+
+Workers can call this script at the end of their execution to trigger dependent streams:
+
+```python
+# At end of worker prompt or in worker's final steps
+import subprocess
+subprocess.run([
+    "python3",
+    ".claude/orchestrator/start-ready-streams.py",
+    "--completed-stream", "Stream-A"
+])
+```
+
+### Benefits
+
+| Benefit | Impact |
+|---------|--------|
+| **Reduced Latency** | Dependent streams start immediately instead of waiting for next poll |
+| **Faster Overall Execution** | Especially beneficial for deep dependency chains |
+| **Better Resource Usage** | Workers start as soon as they're ready, maximizing parallelism |
+| **Orchestrator Still Works** | The polling orchestrator continues as backup/fallback |
+
+### Architecture
+
+```
+orchestrate.py (main loop)
+    ↓ spawns
+worker-wrapper.sh
+    ↓ runs
+Claude worker for Stream-A
+    ↓ completes tasks
+    ↓ (optional) calls
+start-ready-streams.py --completed-stream Stream-A
+    ↓ checks
+Task Copilot database
+    ↓ finds Stream-B and Stream-C are ready
+    ↓ spawns (via orchestrate.py start)
+New workers for Stream-B and Stream-C
+```
+
+### Decision Logic
+
+The script follows this logic for each stream:
+
+1. **Skip if stream is complete** - Check `progress.is_complete`
+2. **Skip if already running** - Check PID file existence
+3. **Filter by --completed-stream** - Only consider streams that depend on the specified stream
+4. **Check all dependencies complete** - Verify all dependency streams have 100% completion
+5. **Start ready streams** - Call `orchestrate.py start <stream-id>` for each ready stream
+
+### Example Flow
+
+Given dependency chain: `Stream-A → [Stream-B, Stream-C] → Stream-D`
+
+**Without worker chaining:**
+```
+T=0:00  Stream-A completes
+T=0:30  Orchestrator polls, starts B and C
+T=2:00  Stream-B completes
+T=2:10  Stream-C completes
+T=2:30  Orchestrator polls, starts D
+Total delay from dependencies: 60 seconds
+```
+
+**With worker chaining:**
+```
+T=0:00  Stream-A completes, immediately triggers B and C
+T=2:00  Stream-B completes, checks D (not ready yet)
+T=2:10  Stream-C completes, immediately triggers D
+Total delay from dependencies: 0 seconds
+```
+
+### Integration with worker-wrapper.sh
+
+The worker-wrapper.sh handles PID management and logging. When combined with worker chaining:
+
+1. Worker-wrapper spawns Claude session
+2. Claude completes all tasks in stream
+3. (Optional) Claude calls start-ready-streams.py before exit
+4. Worker-wrapper cleans up PID file
+5. Start-ready-streams spawns new workers (which use worker-wrapper)
+
+### Best Practices
+
+1. **Use --completed-stream flag** when calling from workers for efficiency
+2. **Call after verifying tasks complete** to avoid false triggers
+3. **Handle errors gracefully** - orchestrator polling provides fallback
+4. **Don't rely solely on chaining** - orchestrator still needed for restart scenarios
+
+---
+
 ## File Locations
 
 | File | Purpose |
 |------|---------|
 | `.claude/orchestrator/orchestrate.py` | Main orchestrator script |
+| `.claude/orchestrator/start-ready-streams.py` | Worker chaining script (automatic stream starting) |
+| `.claude/orchestrator/worker-wrapper.sh` | Worker wrapper for PID management and log archiving |
 | `.claude/orchestrator/task_copilot_client.py` | Task Copilot data abstraction |
 | `.claude/orchestrator/check_streams_data.py` | Stream data fetcher |
 | `.claude/orchestrator/check-streams` | Status dashboard script |

@@ -305,12 +305,33 @@ Run `/orchestrate generate` first to create PRD and tasks with stream metadata.
 
 ---
 
+**Stale PID Cleanup (automatic on startup):**
+
+Before any workers are spawned, the orchestrator automatically cleans up orphaned PID files:
+
+1. **Scan PID directory** - Find all existing `.pid` files in `.claude/orchestrator/pids/`
+2. **Check process status** - For each PID file:
+   - Read the PID value
+   - Run `ps -p <PID>` to check if process is actually running
+   - If process not found or is zombie: Remove the stale PID file
+   - If process is running: Preserve the PID file
+3. **Log cleanup** - Display count of cleaned up stale PID files for visibility
+
+This ensures a clean slate when starting new orchestration, preventing false "already running" errors from crashed workers.
+
+---
+
 **Execution (after verification passes):**
 
 After file and stream validation passes, start the orchestration system:
 ```bash
 python .claude/orchestrator/orchestrate.py start
 ```
+
+**On startup, orchestrator will:**
+1. Clean up stale PID files (logged if any found)
+2. Validate stream metadata and dependencies
+3. Spawn workers according to dependency order
 
 Options:
 - `start` - Start all streams (respects dependencies)
@@ -373,7 +394,7 @@ your-project/
 │       ├── check_streams_data.py    # Stream data fetcher
 │       ├── check-streams            # Status dashboard
 │       ├── watch-status             # Live monitoring wrapper
-│       ├── logs/                    # Worker logs (created at runtime)
+│       ├── logs/                    # Worker logs (per-initiative: Stream-A_abc12345.log)
 │       └── pids/                    # Worker PIDs (created at runtime)
 └── watch-status                     # Symlink to orchestrator/watch-status
 ```
@@ -428,6 +449,11 @@ Execution:
 - **Solution:** Run `/orchestrate generate` first to create PRD and tasks with stream metadata
 - Also check: Tasks are not archived (`archived = 0`)
 
+### "Worker already running" (false positive)
+- **Cause:** Stale PID file from crashed worker
+- **Solution:** This is now automatically fixed on startup - stale PID files are cleaned up before spawning workers
+- **Manual fix:** If needed, run: `rm .claude/orchestrator/pids/*.pid` then retry `/orchestrate start`
+
 ### "Circular dependency detected"
 - Review dependency graph for cycles (A → B → C → A is invalid)
 - Restructure to break the cycle
@@ -453,6 +479,7 @@ For full orchestration system documentation, see:
 - **No orchestrator modifications needed**: Configure via Task Copilot metadata
 - **Automatic parallelism**: Independent streams run simultaneously
 - **Clean shutdown**: Ctrl-C stops orchestrator, workers continue (use `stop` command to kill workers)
+- **Automatic PID cleanup**: Stale PID files from crashed workers are automatically removed on startup, preventing false "already running" errors
 
 ---
 
@@ -501,7 +528,15 @@ When user runs `/orchestrate [command]`:
      - **If any files missing:** Display error box directing user to run `/orchestrate generate` first
      - **CRITICAL: Do NOT create files - only verify they exist**
      - **If missing, STOP and direct user to `/orchestrate generate`**
-   - **Pre-flight Validation (runs after file verification):**
+   - **Stale PID Cleanup (automatic - runs after file verification):**
+     - Orchestrator automatically cleans up orphaned PID files on startup
+     - For each `.pid` file in `.claude/orchestrator/pids/`:
+       - Check if process is actually running via `ps -p <PID>`
+       - Remove PID file if process is dead or zombie
+       - Preserve PID file if process is alive
+     - Log count of cleaned up files for visibility
+     - This prevents false "already running" errors from crashed workers
+   - **Pre-flight Validation (runs after cleanup):**
      - Query Task Copilot for tasks with `metadata.streamId`
      - **If no streams found:** ERROR - direct user to run `/orchestrate generate` first
      - Verify at least one foundation stream exists (empty dependencies)
