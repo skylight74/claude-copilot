@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-01-13
+
+### Added
+
+- **Orchestration Initiative Lifecycle Management**:
+  - Initiative-scoped stream filtering in `orchestrate.py`
+  - Auto-completion detection when all streams reach 100%
+  - Automatic stream archival on initiative completion
+  - `initiative_complete()` integration with Memory Copilot
+  - PRD-scoped `stream_unarchive()` prevents cross-initiative pollution
+
+- **Mandatory Generation Verification**:
+  - `/orchestrate generate` verifies PRDs/tasks exist after @agent-ta
+  - Clear error messaging when verification fails
+  - Retry mechanism with stronger tool enforcement
+  - `initiative_link()` called before PRD creation (archives old streams)
+
+- **File Management Improvements**:
+  - Orchestrator file creation moved from `start` to `generate`
+  - `start` command only verifies files exist (doesn't create)
+  - `watch-status` symlink created at project root by `generate`
+  - Completion callback in watch-status with celebration banner
+
+- **Lean Agent + Deep Skills Architecture**:
+  - Agents refactored from 400+ tokens to 60-100 tokens (67% reduction)
+  - Domain expertise moved to loadable skill files
+  - `skill_evaluate()` for context-aware skill detection
+  - TF-IDF-based confidence scoring for skill relevance
+  - Skills support `trigger_files` and `trigger_keywords` patterns
+  - 11+ deep skills created across code, testing, architecture, security, devops, design
+
+- **Integration Tests**:
+  - Orchestration lifecycle tests (generate → start → complete)
+  - Initiative switch and stream archival tests
+  - Hooks, evaluation, and correction detection tests
+
+### Changed
+
+- **Agent Count**: Updated from 12 to 13 agents throughout documentation
+- **Agent Model**: All agents now use lean model with on-demand skill loading
+- **Documentation**: Comprehensive alignment with new architecture
+- **Acknowledgements**: Added Lean Agent + Deep Skills pattern attribution
+
+### Technical
+
+- New methods in `task_copilot_client.py`: `get_active_initiative_id()`, `archive_initiative_streams()`, `complete_initiative()`
+- Initiative filtering in `_query_streams()` and `_get_stream_status()`
+- Watch-status completion detection and auto-exit
+- 1,200+ lines changed across orchestrator, agents, skills, and documentation
+
 ## [2.2.0] - 2026-01-12
 
 ### Added
