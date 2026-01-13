@@ -74,6 +74,31 @@ Comprehensive research on context engineering principles including attention bud
 - Front-loading critical decisions and back-loading action items
 - Table-first writing for 25-50% token savings
 
+### Lean Agent + Deep Skills Architecture
+**Pattern Source:** Anthropic's agent design patterns and the broader AI agent community
+
+The "lean agent with external expertise" pattern emerged from multiple sources in the AI agent ecosystem:
+
+**Core Pattern:**
+- Slim agent definitions (~60-100 lines) focusing on workflow and routing
+- Domain expertise moved to loadable skill files (200-500 lines)
+- Context-aware skill selection via evaluation systems
+- On-demand loading reduces baseline token usage by 67%
+
+**Influence Sources:**
+- **Anthropic's MCP and Agent Patterns**: The Model Context Protocol documentation and agent design guides emphasize minimal agent definitions with external tool/resource access
+- **Agent Skills for Context Engineering**: Progressive disclosure and attention budget optimization
+- **Awesome Agent Skills**: Standardized skill format and size limits (500-line maximum)
+- **Community Best Practices**: Pattern observed across claude-howto, Oh My OpenCode, and BMAD Method
+
+This architectural pattern allows agents to remain lightweight while accessing deep domain knowledge only when needed, significantly improving context efficiency and agent maintainability.
+
+**Our Implementation:**
+- `skill_evaluate()` tool for automatic skill detection (file patterns + keyword matching)
+- TF-IDF-based confidence scoring for skill relevance
+- Native `@include` support for zero-overhead skill loading
+- Optional MCP integration for marketplace skills (25K+ public skills)
+
 ### Awesome Agent Skills
 **Source:** [github.com/heilcheng/awesome-agent-skills](https://github.com/heilcheng/awesome-agent-skills)
 **Author:** [heilcheng](https://github.com/heilcheng)

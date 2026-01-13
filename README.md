@@ -29,7 +29,8 @@ It's not separate software—it's markdown files (agents, commands, project inst
 | You Get | What It Does |
 |---------|--------------|
 | **Persistent Memory** | Decisions, lessons, and progress survive across sessions |
-| **13 Specialist Agents** | Expert guidance for architecture, security, UX, creative, and more |
+| **13 Lean Agents** | Specialist agents (~60-100 lines) with on-demand skill loading |
+| **Auto-Load Skills** | Agents detect and load relevant skills based on context (file patterns + keywords) |
 | **Parallel Orchestration** | Headless workers execute streams concurrently with `/orchestrate` |
 | **Pause & Resume** | Context switch mid-task with `/pause`, return with `/continue` |
 | **Task Management** | PRDs, tasks, and work products with minimal context usage |

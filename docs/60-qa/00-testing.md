@@ -83,9 +83,9 @@ If any test fails, see the detailed logs for which specific test failed and why.
 | Invalid JSON in .mcp.json | Syntax error | Run `jq . .mcp.json` to validate |
 | Time estimate violation | Prohibited language in agent files | Remove time-based language, see policy |
 
-**Known Issue: Agent Structure Inconsistency**
+**Lean Agent Model (v1.8+)**
 
-Current state: 4 of 12 agents have full required structure, 8 use simplified format.
+Current state: All 13 agents use the lean agent model (~60-100 lines) with on-demand skill loading via `skill_evaluate()`.
 
 **Agents with full structure:**
 - cw.md (Copywriter)
