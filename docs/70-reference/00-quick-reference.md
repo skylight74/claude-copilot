@@ -134,7 +134,7 @@ your-project/
     ├── commands/                # /protocol, /continue
     │   ├── protocol.md
     │   └── continue.md
-    ├── agents/                  # 12 specialized agents
+    ├── agents/                  # 13 lean agents (~60-100 lines each)
     │   ├── ta.md               # Tech Architect
     │   ├── me.md               # Engineer
     │   ├── qa.md               # QA Engineer
@@ -223,7 +223,9 @@ your-project/
 - `WORKSPACE_ID`: Explicit workspace identifier (optional, defaults to path hash)
 
 ### 2. Agents
-**12 specialized agents for complex development tasks**
+**13 lean agents with on-demand skill loading**
+
+Agents are ~60-100 lines and auto-load relevant skills via `skill_evaluate()`.
 
 | Agent | Name | Domain |
 |-------|------|--------|

@@ -19,6 +19,7 @@ import {
 import { SkillsMPProvider, PostgresProvider, CacheProvider, LocalProvider, KnowledgeRepoProvider } from './providers/index.js';
 import type { SkillsHubConfig, Skill, SkillMeta, SkillMatch, SkillSource, SkillSaveParams, ResolvedExtension, ExtensionListItemWithSource, KnowledgeRepoStatus, KnowledgeRepoConfig, KnowledgeSearchResult, KnowledgeSearchOptions } from './types.js';
 import { detectTriggeredSkills, formatTriggerMatches } from './triggers.js';
+import { ConfidenceScorer, formatEvaluationResults, type EvaluationContext } from './evaluation/index.js';
 
 // Configuration from environment
 const config: SkillsHubConfig = {
@@ -43,6 +44,7 @@ const local = new LocalProvider(config.localSkillsPath || '');
 const skillsmp = config.skillsmpApiKey ? new SkillsMPProvider(config.skillsmpApiKey) : null;
 const postgres = config.postgresUrl ? new PostgresProvider(config.postgresUrl) : null;
 const knowledgeRepo = new KnowledgeRepoProvider(knowledgeRepoConfig);
+const skillEvaluator = new ConfidenceScorer();
 
 // Create MCP server
 const server = new Server(
@@ -251,6 +253,42 @@ const TOOLS = [
         }
       },
       required: ['path']
+    }
+  },
+  // Skill evaluation tool
+  {
+    name: 'skill_evaluate',
+    description: 'Evaluate context to find relevant skills with confidence scores. Combines file pattern matching and keyword detection. Returns ranked skills above threshold.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File paths to analyze for pattern matching (e.g., ["src/test.spec.ts", "config.json"])'
+        },
+        text: {
+          type: 'string',
+          description: 'Text content to analyze for keyword matching (e.g., prompt, conversation, file content)'
+        },
+        recentActivity: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Recent activity keywords for boosting (e.g., ["testing", "deployment"])'
+        },
+        threshold: {
+          type: 'number',
+          description: 'Minimum confidence score 0-1 (default: 0.3)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return (default: 10)'
+        },
+        showDetails: {
+          type: 'boolean',
+          description: 'Include detailed match information (default: false)'
+        }
+      }
     }
   }
 ];
@@ -906,6 +944,63 @@ Consider: Main skill + helper skills pattern`
             type: 'text',
             text: `# ${filePath}\n\n**Source:** ${result.source}\n**Path:** ${result.absolutePath}\n\n---\n\n${result.content}`
           }]
+        };
+      }
+
+      case 'skill_evaluate': {
+        const files = a.files as string[] | undefined;
+        const text = a.text as string | undefined;
+        const recentActivity = a.recentActivity as string[] | undefined;
+        const threshold = a.threshold as number | undefined;
+        const limit = a.limit as number | undefined;
+        const showDetails = a.showDetails as boolean | undefined;
+
+        if (!files && !text) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Must provide either "files" or "text" parameter for skill evaluation.'
+            }],
+            isError: true
+          };
+        }
+
+        // Build skills map from local provider
+        const skillsList = local.listSkills();
+        if (!skillsList.success || !skillsList.data || skillsList.data.length === 0) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'No skills available for evaluation. Add skills to .claude/skills or ~/.claude/skills.'
+            }]
+          };
+        }
+
+        // Convert to map and set in evaluator
+        const skillsMap = new Map<string, SkillMeta>();
+        for (const skill of skillsList.data) {
+          skillsMap.set(skill.name, skill);
+        }
+        skillEvaluator.setSkills(skillsMap);
+
+        // Build evaluation context
+        const context: EvaluationContext = {
+          files,
+          text,
+          recentActivity,
+        };
+
+        // Run evaluation
+        const results = skillEvaluator.evaluate(context, {
+          threshold: threshold ?? 0.3,
+          limit: limit ?? 10,
+        });
+
+        // Format and return results
+        const output = formatEvaluationResults(results, showDetails ?? false);
+
+        return {
+          content: [{ type: 'text', text: output }]
         };
       }
 

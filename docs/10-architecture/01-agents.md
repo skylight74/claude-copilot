@@ -1,6 +1,30 @@
 # Meet Your Team
 
-Claude Copilot gives you access to **12 specialized agents**—each an expert in their domain, knowing when to collaborate and when to hand off to others.
+Claude Copilot gives you access to **13 specialized agents**—each an expert in their domain, built using the **lean agent model** with on-demand skill loading.
+
+## Architecture: Lean Agents + Deep Skills
+
+Agents are kept minimal (~60-100 lines) and auto-load domain expertise on demand:
+
+| Component | Size | Purpose |
+|-----------|------|---------|
+| Agent file | ~60-100 lines | Core workflow, routing, behaviors |
+| Skills | ~200-500 lines each | Domain patterns, anti-patterns, examples |
+| Total context | ~1,000 tokens | Agent + relevant skills only |
+
+**How it works:**
+1. Agent calls `skill_evaluate({ files, text })` to detect relevant skills
+2. Skills ranked by confidence (file patterns + keyword matching)
+3. Agent loads top skills via `@include` directive
+4. Work executes with specialized knowledge
+
+**Benefits:**
+- 67% less context per agent (3,000 → 1,000 tokens)
+- Skills loaded only when needed
+- Extensible without modifying agents
+- Faster agent startup
+
+→ [Lean Agent Migration Guide](../50-features/lean-agents-migration.md)
 
 ---
 
@@ -305,7 +329,7 @@ User Request: "Redesign our onboarding experience"
 
 ## Task Copilot Integration
 
-Agents store their detailed work products in Task Copilot instead of returning them to the main session. This reduces context usage by ~96%.
+Lean agents store their detailed work products in Task Copilot instead of returning them to the main session. This reduces context usage by ~96%.
 
 ### How It Works
 
@@ -313,8 +337,11 @@ Agents store their detailed work products in Task Copilot instead of returning t
 User Request: "Design the auth system"
          │
          ▼
-    @agent-ta
-    (creates PRD, breaks down tasks)
+    @agent-ta (lean agent)
+         │
+         ├──→ Calls skill_evaluate() to load relevant skills
+         │
+         ├──→ Creates PRD, breaks down tasks
          │
          ├──→ Stores PRD in Task Copilot (prd_create)
          │

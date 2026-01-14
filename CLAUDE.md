@@ -144,8 +144,8 @@ Ask yourself:
 | Context switch mid-task | `/pause switching to X` | Creates checkpoint, switch safely |
 | Understand new codebase | `/map` | Generates PROJECT_MAP.md |
 | View memory state | `/memory` | See current initiative & recent activity |
-| Run parallel work streams | `/orchestrate start` | Spawns autonomous workers |
-| Monitor orchestration | `/orchestrate status` | Live progress dashboard |
+| Run parallel work streams | `/orchestrate generate` then `/orchestrate start` | Create PRD + tasks → spawn workers |
+| Monitor orchestration | `/orchestrate status` or `./watch-status` | Live progress dashboard |
 | Set up team standards | `/knowledge-copilot` | Create extension repository |
 | Initialize new project | `/setup-project` | Framework installs |
 | Update all projects | `/update-project` (each project) | Syncs latest changes |
@@ -212,7 +212,7 @@ MCP server providing persistent memory across sessions.
 
 ### 2. Agents
 
-13 specialized agents for complex development tasks.
+13 specialized agents for complex development tasks using the **lean agent model**.
 
 **Location:** `.claude/agents/`
 
@@ -231,6 +231,29 @@ MCP server providing persistent memory across sessions.
 | `cw` | Copywriter | Content/copy |
 | `cco` | Creative Chief Officer | Creative direction |
 | `kc` | Knowledge Copilot | Shared knowledge setup |
+
+**Lean Agent Model:**
+
+Agents are ~60-100 lines and auto-load domain skills using `skill_evaluate`:
+
+```typescript
+// Agents auto-detect relevant skills
+const skills = await skill_evaluate({
+  files: ['src/auth/login.ts'],     // Files being worked on
+  text: task.description,            // Task context
+  threshold: 0.5                     // Minimum confidence
+});
+// Then load matching skills via @include
+```
+
+**Required Agent Tools:**
+
+| Tool | Purpose |
+|------|---------|
+| `preflight_check` | Verify environment before work |
+| `skill_evaluate` | Auto-detect and load skills |
+| `task_get`, `task_update` | Task management |
+| `work_product_store` | Store output (not in response) |
 
 ### 3. Skills (Native & MCP)
 
@@ -260,6 +283,21 @@ When writing tests:
 - User-level skills (`~/.claude/skills/`)
 - Simple, direct loading
 
+#### Auto-Detection with skill_evaluate
+
+Agents use `skill_evaluate` to automatically detect relevant skills based on file patterns and keywords:
+
+```typescript
+const skills = await skill_evaluate({
+  files: ['src/Button.test.tsx'],     // Match against trigger_files
+  text: 'Help with React testing',    // Match against trigger_keywords
+  threshold: 0.5                      // Minimum confidence (0-1)
+});
+// Returns ranked list: { skillName, confidence, path }
+```
+
+See [Skill Evaluation Quick Reference](#skill-evaluation-quick-reference) for details.
+
 #### Skills Copilot MCP (OPTIONAL)
 
 MCP server for advanced skill management and marketplace access.
@@ -274,6 +312,7 @@ MCP server for advanced skill management and marketplace access.
 | `skill_search` | Search skills across sources |
 | `skill_list` | List available skills |
 | `skill_save` | Save skill to private DB |
+| `skill_evaluate` | Auto-detect skills from context |
 
 **Knowledge Tools:**
 
@@ -335,6 +374,9 @@ Streams are automatically archived when switching initiatives via `initiative_li
 | Switch to new initiative | Old streams auto-archived |
 | Re-link same initiative | No archival (streams preserved) |
 | `/continue Stream-A` | Only shows current initiative's streams |
+| `/orchestrate generate` | Calls `initiative_link()` → archives old streams before creating new ones |
+| `/orchestrate start` | Only spawns workers for current initiative's streams |
+| `watch-status` | Only displays streams from active initiative |
 | Need old stream back | Use `stream_unarchive({ streamId: "Stream-A" })` |
 
 **After Updating from Pre-1.7.1:** Run `stream_archive_all({ confirm: true })` once to clean up legacy streams from before the auto-archive feature.
@@ -579,8 +621,11 @@ See [extension-spec.md](docs/40-extensions/00-extension-spec.md) for full docume
 | MCP Servers | `mcp-servers/` |
 | Decision matrices | `docs/10-architecture/03-decision-guide.md` |
 | Operations docs | `docs/30-operations/` |
+| Feature docs | `docs/50-features/` |
 | Templates | `templates/` |
+| Integration tests | `tests/integration/` |
 | Extension spec | `docs/40-extensions/00-extension-spec.md` |
+| Orchestration workflow | `docs/50-features/02-orchestration-workflow.md` |
 
 ---
 
@@ -763,3 +808,138 @@ if (!health.healthy) {
 
 // Proceed with implementation
 ```
+
+---
+
+## Lifecycle Hooks Quick Reference
+
+Lifecycle hooks intercept execution at critical phases for security, transformation, and monitoring.
+
+### Hook Types
+
+| Hook | Fires | Primary Use |
+|------|-------|-------------|
+| `PreToolUse` | Before tool executes | Security validation, preprocessing |
+| `PostToolUse` | After tool completes | Logging, result transformation |
+| `UserPromptSubmit` | Before prompt processing | Context injection, skill detection |
+
+### PreToolUse Security Rules (Built-in)
+
+| Rule | Action | Detects |
+|------|--------|---------|
+| `secret-detection` | Block | AWS keys, GitHub tokens, JWTs, private keys |
+| `destructive-command` | Block | `rm -rf /`, `DROP DATABASE`, etc. |
+| `sensitive-file-protection` | Block | `.env`, credentials, SSH keys |
+| `credential-url` | Block | URLs with embedded passwords |
+
+### Hook API Examples
+
+```typescript
+// Test if a tool call would be blocked
+import { testSecurityRules } from 'task-copilot/hooks';
+const result = await testSecurityRules('Write', { file_path: '.env', content: '...' });
+if (!result.allowed) console.log('Would be blocked:', result.violations);
+
+// Register custom rule
+import { registerSecurityRule, SecurityAction } from 'task-copilot/hooks';
+registerSecurityRule({
+  id: 'my-rule', name: 'Custom', description: '...', enabled: true, priority: 75,
+  evaluate: (ctx) => ctx.toolInput.content?.includes('UNSAFE')
+    ? { action: SecurityAction.BLOCK, ruleName: 'my-rule', reason: 'Unsafe', severity: 'high' }
+    : null
+});
+```
+
+**Full documentation:** [docs/50-features/lifecycle-hooks.md](docs/50-features/lifecycle-hooks.md)
+
+---
+
+## Skill Evaluation Quick Reference
+
+Automatically detect relevant skills from file patterns and text keywords.
+
+### Evaluation Methods
+
+| Method | Analyzes | Weight |
+|--------|----------|--------|
+| Pattern matching | File paths (glob patterns) | 0.5 |
+| Keyword detection | Text content (TF-IDF) | 0.5 |
+
+### skill_evaluate Tool
+
+```typescript
+// Evaluate context for relevant skills
+const result = await skill_evaluate({
+  files: ['src/Button.test.tsx'],     // File patterns to match
+  text: 'Help with React testing',    // Keywords to detect
+  recentActivity: ['testing'],        // Boost matching skills
+  threshold: 0.3,                     // Min confidence (0-1)
+  limit: 5                            // Max results
+});
+
+// Returns ranked skills:
+// { skillName: 'react-testing', confidence: 0.78, level: 'high', reason: '...' }
+```
+
+### Confidence Levels
+
+| Level | Threshold | Meaning |
+|-------|-----------|---------|
+| High | >= 0.7 | Strong match, likely relevant |
+| Medium | >= 0.4 | Moderate match, possibly relevant |
+| Low | < 0.4 | Weak match |
+
+**Full documentation:** [docs/50-features/skill-evaluation.md](docs/50-features/skill-evaluation.md)
+
+---
+
+## Correction Detection Quick Reference
+
+Auto-capture user corrections for continuous agent/skill improvement.
+
+### Detection Patterns
+
+| Pattern Type | Example | Weight |
+|--------------|---------|--------|
+| Explicit | "Correction: use X" | 0.95 |
+| Negation | "No, that's wrong" | 0.90 |
+| Replacement | "Use X instead of Y" | 0.90 |
+| Preference | "I prefer X over Y" | 0.75 |
+
+### Correction Tools
+
+| Tool | Purpose |
+|------|---------|
+| `correction_detect` | Detect patterns in user message |
+| `correction_list` | List pending/approved corrections |
+| `correction_update` | Approve or reject a correction |
+| `correction_route` | Get routing info (skill/agent/memory) |
+
+### /reflect Command
+
+Review and manage pending corrections:
+
+```bash
+/reflect                    # Review all pending
+/reflect --agent me         # Filter by agent
+/reflect --status approved  # Filter by status
+```
+
+### Example Detection
+
+```typescript
+import { detectCorrections } from 'copilot-memory/tools/correction-tools';
+
+const result = detectCorrections({
+  userMessage: 'Actually, use async/await instead of callbacks',
+  previousAgentOutput: '...',
+  agentId: 'me',
+  threshold: 0.5
+}, 'project-id');
+
+// result.detected: true
+// result.maxConfidence: 0.85
+// result.suggestedAction: 'auto_capture'
+```
+
+**Full documentation:** [docs/50-features/correction-detection.md](docs/50-features/correction-detection.md)

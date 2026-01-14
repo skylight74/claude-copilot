@@ -79,7 +79,7 @@ def main():
         # Check if ALL streams are 100% complete
         all_complete = True
         for stream_info in streams:
-            progress = client.stream_get(stream_info.stream_id)
+            progress = client.stream_get(stream_info.stream_id, initiative_id)
             if progress and not progress.is_complete:
                 all_complete = False
                 break
@@ -90,7 +90,7 @@ def main():
 
         # Get progress for each stream
         for stream_info in streams:
-            progress = client.stream_get(stream_info.stream_id)
+            progress = client.stream_get(stream_info.stream_id, initiative_id)
             if progress:
                 # Format: STREAM <id> <completed> <total> <pct> <in_progress> <pending> <blocked> <stream_name>
                 stream_name = stream_info.stream_name if stream_info.stream_name else ""

@@ -25,6 +25,7 @@ export interface SkillMeta {
   description: string;
   category?: string;
   keywords: string[];
+  tags?: string[];
   author?: string;
   source: SkillSource;
   stars?: number;

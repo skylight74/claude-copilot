@@ -28,8 +28,17 @@ import {
   initiativeGet,
   initiativeSlim,
   initiativeComplete,
-  initiativeToMarkdown
+  initiativeToMarkdown,
+  detectCorrections,
+  storeCorrection,
+  updateCorrectionStatus,
+  listCorrections,
+  getCorrectionStats,
+  routeCorrection,
+  applyCorrection,
+  getRoutingSummary
 } from './tools/index.js';
+import type { CorrectionStatus, CorrectionTarget } from './types/corrections.js';
 import { getInitiativeResource, getInitiativeSummary } from './resources/initiative-resource.js';
 import { getContextResource } from './resources/context-resource.js';
 import type { MemoryType, InitiativeStatus } from './types.js';
@@ -250,6 +259,97 @@ const TOOLS = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'correction_detect',
+    description: 'Auto-detect correction patterns in user messages. Returns matched patterns, confidence score, and extracted old/new values. Use for the two-stage correction workflow: auto-capture → manual review via /reflect.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        userMessage: { type: 'string', description: 'User message to analyze for correction patterns' },
+        previousAgentOutput: { type: 'string', description: 'Previous agent output (for context)' },
+        taskId: { type: 'string', description: 'Current task context' },
+        agentId: { type: 'string', description: 'Current agent context (me, ta, qa, etc.)' },
+        threshold: { type: 'number', description: 'Minimum confidence threshold 0-1 (default: 0.5)' },
+        autoStore: { type: 'boolean', description: 'Automatically store detected corrections (default: false)' }
+      },
+      required: ['userMessage']
+    }
+  },
+  {
+    name: 'correction_list',
+    description: 'List corrections with optional filters. Use with /reflect command to review pending corrections.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['pending', 'approved', 'rejected', 'applied', 'expired'],
+          description: 'Filter by status'
+        },
+        agentId: { type: 'string', description: 'Filter by agent (me, ta, qa, etc.)' },
+        target: {
+          type: 'string',
+          enum: ['skill', 'agent', 'memory', 'preference'],
+          description: 'Filter by target type'
+        },
+        limit: { type: 'number', description: 'Max results (default: 20)' },
+        includeExpired: { type: 'boolean', description: 'Include expired corrections (default: false)' }
+      }
+    }
+  },
+  {
+    name: 'correction_update',
+    description: 'Update a correction status after user review. Called from /reflect command.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        correctionId: { type: 'string', description: 'Correction ID to update' },
+        status: {
+          type: 'string',
+          enum: ['approved', 'rejected', 'applied'],
+          description: 'New status'
+        },
+        rejectionReason: { type: 'string', description: 'Reason for rejection (if rejecting)' }
+      },
+      required: ['correctionId', 'status']
+    }
+  },
+  {
+    name: 'correction_stats',
+    description: 'Get correction statistics for the current project.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'correction_route',
+    description: 'Get routing information for a correction. Shows target file/agent and apply instructions without actually applying.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        correctionId: { type: 'string', description: 'Correction ID to route' },
+        forceTarget: {
+          type: 'string',
+          enum: ['skill', 'agent', 'memory', 'preference'],
+          description: 'Override auto-detected target'
+        },
+        forceTargetId: { type: 'string', description: 'Override target ID (skill name, agent id, etc.)' }
+      },
+      required: ['correctionId']
+    }
+  },
+  {
+    name: 'correction_apply',
+    description: 'Apply an approved correction to its target. Marks as applied and returns instructions for the responsible agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        correctionId: { type: 'string', description: 'Correction ID to apply' }
+      },
+      required: ['correctionId']
+    }
   }
 ];
 
@@ -386,6 +486,158 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               projectId: db.getProjectId(),
               sessionId,
               ...stats
+            }, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_detect': {
+        const result = detectCorrections({
+          userMessage: a.userMessage as string,
+          previousAgentOutput: a.previousAgentOutput as string | undefined,
+          taskId: a.taskId as string | undefined,
+          agentId: a.agentId as string | undefined,
+          threshold: a.threshold as number | undefined
+        }, db.getProjectId());
+
+        // Auto-store if requested and corrections detected
+        if (a.autoStore && result.detected && result.corrections.length > 0) {
+          for (const correction of result.corrections) {
+            storeCorrection(db, correction, sessionId);
+          }
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              detected: result.detected,
+              patternMatchCount: result.patternMatchCount,
+              maxConfidence: result.maxConfidence,
+              suggestedAction: result.suggestedAction,
+              corrections: result.corrections.map(c => ({
+                id: c.id,
+                originalContent: c.originalContent,
+                correctedContent: c.correctedContent,
+                target: c.target,
+                targetId: c.targetId,
+                confidence: c.confidence,
+                matchedPatterns: c.matchedPatterns.map(p => p.patternId),
+                status: c.status
+              }))
+            }, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_list': {
+        const corrections = listCorrections(db, {
+          status: a.status as CorrectionStatus | undefined,
+          agentId: a.agentId as string | undefined,
+          target: a.target as CorrectionTarget | undefined,
+          limit: (a.limit as number) || 20,
+          includeExpired: a.includeExpired as boolean | undefined
+        });
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              count: corrections.length,
+              corrections: corrections.map(c => ({
+                id: c.id,
+                originalContent: c.originalContent.substring(0, 100) + (c.originalContent.length > 100 ? '...' : ''),
+                correctedContent: c.correctedContent.substring(0, 100) + (c.correctedContent.length > 100 ? '...' : ''),
+                target: c.target,
+                targetId: c.targetId,
+                confidence: c.confidence,
+                status: c.status,
+                createdAt: c.createdAt
+              }))
+            }, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_update': {
+        const reviewMetadata = a.rejectionReason
+          ? { rejectionReason: a.rejectionReason as string }
+          : undefined;
+
+        const success = updateCorrectionStatus(
+          db,
+          a.correctionId as string,
+          a.status as CorrectionStatus,
+          reviewMetadata
+        );
+
+        return {
+          content: [{
+            type: 'text',
+            text: success
+              ? `Correction ${a.correctionId} updated to ${a.status}`
+              : `Correction ${a.correctionId} not found`
+          }]
+        };
+      }
+
+      case 'correction_stats': {
+        const stats = getCorrectionStats(db);
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(stats, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_route': {
+        const route = routeCorrection(
+          db,
+          a.correctionId as string,
+          a.forceTarget as CorrectionTarget | undefined,
+          a.forceTargetId as string | undefined
+        );
+
+        if (!route) {
+          return {
+            content: [{
+              type: 'text',
+              text: `Correction ${a.correctionId} not found`
+            }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(route, null, 2)
+          }]
+        };
+      }
+
+      case 'correction_apply': {
+        const result = applyCorrection(db, a.correctionId as string);
+
+        if (!result.success) {
+          return {
+            content: [{
+              type: 'text',
+              text: result.message
+            }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              success: true,
+              message: result.message,
+              route: result.route
             }, null, 2)
           }]
         };
