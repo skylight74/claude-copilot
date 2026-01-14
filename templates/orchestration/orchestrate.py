@@ -618,9 +618,45 @@ Begin by querying your task list with task_list.
             work_dir = PROJECT_ROOT / stream["worktree"]
 
         if not work_dir.exists():
-            # Create worktree if needed
-            log(f"Creating worktree for {stream_id}...")
-            work_dir.mkdir(parents=True, exist_ok=True)
+            # Create proper git worktree (not just a directory!)
+            log(f"Creating git worktree for {stream_id}...")
+
+            # Ensure branch exists (create from current HEAD if not)
+            branch_result = subprocess.run(
+                ["git", "branch", stream_id],
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True
+            )
+            # Ignore error if branch already exists
+
+            # Create the worktree linked to the branch
+            worktree_result = subprocess.run(
+                ["git", "worktree", "add", str(work_dir), stream_id],
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True
+            )
+
+            if worktree_result.returncode != 0:
+                # Check if worktree already exists but directory was deleted
+                if "already checked out" in worktree_result.stderr or "already exists" in worktree_result.stderr:
+                    warn(f"Worktree issue for {stream_id}: {worktree_result.stderr.strip()}")
+                    warn(f"Attempting to repair by removing and recreating...")
+                    subprocess.run(["git", "worktree", "remove", str(work_dir), "--force"], cwd=PROJECT_ROOT, capture_output=True)
+                    subprocess.run(["git", "worktree", "prune"], cwd=PROJECT_ROOT, capture_output=True)
+                    worktree_result = subprocess.run(
+                        ["git", "worktree", "add", str(work_dir), stream_id],
+                        cwd=PROJECT_ROOT,
+                        capture_output=True,
+                        text=True
+                    )
+
+                if worktree_result.returncode != 0:
+                    error(f"Failed to create worktree for {stream_id}: {worktree_result.stderr}")
+                    return False
+
+            success(f"Created git worktree at {work_dir}")
 
         dependencies = self.stream_dependencies.get(stream_id, set())
         deps_str = f" (depends on: {', '.join(dependencies)})" if dependencies else " (no dependencies)"
