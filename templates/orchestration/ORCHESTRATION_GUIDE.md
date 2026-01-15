@@ -10,6 +10,34 @@ The orchestration system spawns multiple headless Claude Code sessions to work o
 
 ---
 
+## Pre-flight Validation
+
+Before starting orchestration, validate your environment is ready:
+
+```bash
+python validate-setup.py              # Run all checks
+python validate-setup.py --verbose    # Show detailed information
+python validate-setup.py --fix        # Attempt automatic fixes
+```
+
+**What it checks:**
+- Python version >= 3.8
+- Claude CLI installed and in PATH
+- Git version >= 2.5 with worktree support
+- Current directory is a git repository
+- Write permissions in project root
+- .mcp.json exists with task-copilot configured
+- MCP servers built (node_modules present)
+- Orchestration templates available
+
+**Exit codes:**
+- 0 = All checks passed, ready for orchestration
+- 1 = One or more checks failed
+
+Run this before `/orchestrate generate` to catch environment issues early.
+
+---
+
 ## How Dependencies Work
 
 ### The Dependency Contract

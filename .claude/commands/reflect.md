@@ -195,7 +195,7 @@ Use `/reflect --all` to see correction history.
 
 No active corrections. All pending corrections have expired.
 
-**Tip:** Corrections expire after 7 days if not reviewed.
+**Tip:** Corrections expire if not reviewed promptly.
 Consider reviewing corrections more frequently.
 ```
 

@@ -8,6 +8,7 @@ All stream information and dependencies are queried from Task Copilot SQLite dat
 NO HARDCODED PHASES - Streams define their own dependencies, execution is fully dynamic.
 
 Usage:
+    python orchestrate.py preflight      # Validate environment before orchestration
     python orchestrate.py start          # Start all streams (respects dependencies)
     python orchestrate.py start Stream-C # Start specific stream
     python orchestrate.py status         # Check status of all streams
@@ -25,9 +26,10 @@ import os
 import sys
 import time
 import signal
+import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from collections import defaultdict
 
 # Import Task Copilot client
@@ -88,6 +90,383 @@ def log_routing(msg: str, to_file: bool = True, to_console: bool = True):
                 f.write(log_msg + "\n")
         except Exception as e:
             warn(f"Failed to write to routing log: {e}")
+
+
+class PreflightValidator:
+    """Validates environment before orchestration to catch issues early."""
+
+    def __init__(self, project_root: Path):
+        self.project_root = project_root
+        self.errors: List[Tuple[str, str]] = []  # (check_name, error_message)
+        self.warnings: List[Tuple[str, str]] = []  # (check_name, warning_message)
+
+    def validate_all(self) -> bool:
+        """Run all validations. Returns True if environment is healthy."""
+        self.errors = []
+        self.warnings = []
+
+        # Run all validation checks
+        self.validate_claude_cli()
+        self.validate_git_worktree_support()
+        self.validate_directory_permissions()
+        self.validate_task_copilot()
+
+        # Return True only if no errors (warnings are acceptable)
+        return len(self.errors) == 0
+
+    def validate_claude_cli(self) -> bool:
+        """Check Claude CLI is in PATH and executable."""
+        # First check with shutil.which
+        claude_path = shutil.which('claude')
+
+        # If not found, check common installation locations
+        if not claude_path:
+            common_paths = [
+                '/opt/homebrew/bin/claude',
+                '/usr/local/bin/claude',
+                os.path.expanduser('~/.local/bin/claude')
+            ]
+            for path in common_paths:
+                if os.path.exists(path) and os.access(path, os.X_OK):
+                    claude_path = path
+                    break
+
+        if not claude_path:
+            self.errors.append((
+                "Claude CLI",
+                "NOT FOUND\n   → Install with: brew install anthropics/tap/claude\n   → Or add claude to PATH"
+            ))
+            return False
+
+        # Verify it's executable
+        if not os.access(claude_path, os.X_OK):
+            self.errors.append((
+                "Claude CLI",
+                f"Found at {claude_path} but NOT EXECUTABLE\n   → Run: chmod +x {claude_path}"
+            ))
+            return False
+
+        return True
+
+    def validate_git_worktree_support(self) -> bool:
+        """Check git supports worktrees and project is a git repo."""
+        # Check if project is a git repository
+        if not (self.project_root / '.git').exists():
+            self.errors.append((
+                "Git Repository",
+                f"NOT A GIT REPO: {self.project_root}\n   → Initialize with: git init"
+            ))
+            return False
+
+        # Check git version supports worktrees (requires git >= 2.5)
+        try:
+            result = subprocess.run(
+                ['git', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                self.errors.append((
+                    "Git Version",
+                    "Could not determine git version"
+                ))
+                return False
+
+            # Parse version (output format: "git version 2.43.0")
+            version_str = result.stdout.strip()
+            # Extract version number
+            import re
+            match = re.search(r'git version (\d+)\.(\d+)', version_str)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                if major < 2 or (major == 2 and minor < 5):
+                    self.errors.append((
+                        "Git Version",
+                        f"Git {major}.{minor} found - worktrees require >= 2.5\n   → Update git: brew upgrade git"
+                    ))
+                    return False
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            self.errors.append((
+                "Git Check",
+                f"Failed to check git version: {e}"
+            ))
+            return False
+
+        # Test worktree support by running 'git worktree list'
+        try:
+            result = subprocess.run(
+                ['git', 'worktree', 'list'],
+                cwd=self.project_root,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                self.errors.append((
+                    "Git Worktree",
+                    f"Git worktree command failed\n   → {result.stderr.strip()}"
+                ))
+                return False
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            self.errors.append((
+                "Git Worktree",
+                f"Failed to test worktree support: {e}"
+            ))
+            return False
+
+        return True
+
+    def validate_directory_permissions(self) -> bool:
+        """Check write permissions for worktree directory."""
+        worktree_base = self.project_root / '.claude' / 'worktrees'
+
+        # If it doesn't exist, check parent directory
+        if not worktree_base.exists():
+            check_dir = self.project_root / '.claude'
+            if not check_dir.exists():
+                check_dir = self.project_root
+        else:
+            check_dir = worktree_base
+
+        if not os.access(check_dir, os.W_OK):
+            self.errors.append((
+                "Directory Permissions",
+                f"Cannot write to {check_dir}\n   → Check permissions: ls -la {check_dir.parent}"
+            ))
+            return False
+
+        # Also check PID and log directories
+        orchestrator_dir = self.project_root / '.claude' / 'orchestrator'
+        if orchestrator_dir.exists():
+            for subdir in ['pids', 'logs']:
+                subdir_path = orchestrator_dir / subdir
+                if subdir_path.exists() and not os.access(subdir_path, os.W_OK):
+                    self.warnings.append((
+                        f"{subdir.title()} Directory",
+                        f"Warning - Cannot write to {subdir_path}"
+                    ))
+
+        return True
+
+    def validate_task_copilot(self) -> bool:
+        """Check Task Copilot MCP server is accessible."""
+        mcp_json_path = self.project_root / '.mcp.json'
+
+        if not mcp_json_path.exists():
+            self.errors.append((
+                "Task Copilot",
+                "NOT CONFIGURED - .mcp.json not found\n   → Run: /setup-project"
+            ))
+            return False
+
+        # Read and parse .mcp.json
+        try:
+            with open(mcp_json_path, 'r') as f:
+                mcp_config = json.load(f)
+        except json.JSONDecodeError as e:
+            self.errors.append((
+                "Task Copilot",
+                f".mcp.json is invalid JSON: {e}"
+            ))
+            return False
+        except Exception as e:
+            self.errors.append((
+                "Task Copilot",
+                f"Could not read .mcp.json: {e}"
+            ))
+            return False
+
+        # Check for task-copilot server configuration
+        if 'mcpServers' not in mcp_config:
+            self.errors.append((
+                "Task Copilot",
+                "NOT CONFIGURED - mcpServers missing in .mcp.json\n   → Run: /setup-project"
+            ))
+            return False
+
+        if 'task-copilot' not in mcp_config['mcpServers']:
+            self.errors.append((
+                "Task Copilot",
+                "NOT CONFIGURED - task-copilot server missing\n   → Run: /setup-project"
+            ))
+            return False
+
+        # Verify the server path exists
+        tc_config = mcp_config['mcpServers']['task-copilot']
+        if 'args' in tc_config and len(tc_config['args']) > 0:
+            server_path = Path(tc_config['args'][0])
+            if not server_path.exists():
+                self.warnings.append((
+                    "Task Copilot",
+                    f"Warning - Server path not found: {server_path}\n   → May need to rebuild: cd mcp-servers/task-copilot && npm run build"
+                ))
+
+        return True
+
+    def validate_worktree(self, worktree_path: Path, main_project_path: Path) -> bool:
+        """
+        Validate a worktree was created correctly.
+
+        Checks:
+        1. Directory exists and is a git worktree (not just mkdir)
+        2. File count is reasonable (within 50% of main project)
+        3. Git recognizes it as a worktree
+
+        Args:
+            worktree_path: Path to the worktree directory
+            main_project_path: Path to the main project root
+
+        Returns:
+            True if worktree is valid, False otherwise
+        """
+        # Clear errors/warnings for this validation
+        worktree_errors = []
+
+        # Check 1: Directory exists
+        if not worktree_path.exists():
+            self.errors.append((
+                "Worktree Validation",
+                f"Directory does not exist: {worktree_path}"
+            ))
+            return False
+
+        # Check 2: .git file exists (worktrees have a .git file, not directory)
+        git_file = worktree_path / '.git'
+        if not git_file.exists():
+            worktree_errors.append(f"Missing .git file in worktree")
+        elif git_file.is_dir():
+            worktree_errors.append(f".git is a directory (should be a file in worktrees)")
+
+        # Check 3: Git recognizes it as a worktree
+        try:
+            result = subprocess.run(
+                ['git', 'worktree', 'list'],
+                cwd=main_project_path,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if result.returncode == 0:
+                # Check if worktree_path is in the output
+                worktree_listed = False
+                for line in result.stdout.strip().split('\n'):
+                    # Lines are like: "/path/to/worktree <hash> [branch]"
+                    if str(worktree_path.resolve()) in line:
+                        worktree_listed = True
+                        break
+
+                if not worktree_listed:
+                    worktree_errors.append(f"Not listed in 'git worktree list'")
+            else:
+                worktree_errors.append(f"Failed to run 'git worktree list'")
+
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            worktree_errors.append(f"Git command failed: {e}")
+
+        # Check 4: File count comparison (within 50% of main project)
+        try:
+            # Count files in main project (excluding .git and common ignore patterns)
+            main_files = []
+            for root, dirs, files in os.walk(main_project_path):
+                # Skip .git and common directories
+                dirs[:] = [d for d in dirs if d not in ['.git', 'node_modules', '__pycache__', '.venv', 'venv']]
+                main_files.extend(files)
+
+            main_file_count = len(main_files)
+
+            # Count files in worktree
+            worktree_files = []
+            for root, dirs, files in os.walk(worktree_path):
+                dirs[:] = [d for d in dirs if d not in ['.git', 'node_modules', '__pycache__', '.venv', 'venv']]
+                worktree_files.extend(files)
+
+            worktree_file_count = len(worktree_files)
+
+            # Expect at least 50% of main project files
+            min_expected = int(main_file_count * 0.5)
+
+            if worktree_file_count < min_expected:
+                worktree_errors.append(
+                    f"Directory has {worktree_file_count} files, expected ~{main_file_count} (main project has {main_file_count})"
+                )
+
+        except Exception as e:
+            # File count check is best-effort, don't fail validation on exceptions
+            pass
+
+        # If there are errors, compile them into a single error message
+        if worktree_errors:
+            error_msg = f"INVALID WORKTREE: {worktree_path}\n"
+            for err in worktree_errors:
+                error_msg += f"   → {err}\n"
+            error_msg += "   → This usually means 'mkdir' was used instead of 'git worktree add'\n"
+            error_msg += f"   → Fix: Remove directory and re-create with 'git worktree add'"
+
+            self.errors.append((
+                "Worktree Validation",
+                error_msg
+            ))
+            return False
+
+        return True
+
+    def print_report(self) -> None:
+        """Print validation results with actionable messages."""
+        print(f"\n{Colors.BOLD}🔍 Pre-flight Validation{Colors.NC}")
+        print("=" * 60)
+
+        # Track all checks performed
+        all_checks = {
+            "Claude CLI": True,
+            "Git Worktree": True,
+            "Permissions": True,
+            "Task Copilot": True
+        }
+
+        # Mark failed checks
+        for check_name, _ in self.errors:
+            all_checks[check_name] = False
+
+        # Print status for each check
+        for check_name, passed in all_checks.items():
+            if passed:
+                # Check if there's a warning for this check
+                warning = next((msg for name, msg in self.warnings if name == check_name), None)
+                if warning:
+                    print(f"⚠️  {Colors.YELLOW}{check_name}{Colors.NC}: {warning}")
+                else:
+                    # Need to show details for passing checks
+                    if check_name == "Claude CLI":
+                        claude_path = shutil.which('claude') or '/opt/homebrew/bin/claude'
+                        print(f"✅ {Colors.GREEN}{check_name}{Colors.NC}: Found at {claude_path}")
+                    elif check_name == "Git Worktree":
+                        try:
+                            result = subprocess.run(['git', '--version'], capture_output=True, text=True, timeout=5)
+                            version = result.stdout.strip()
+                            print(f"✅ {Colors.GREEN}{check_name}{Colors.NC}: Supported ({version})")
+                        except:
+                            print(f"✅ {Colors.GREEN}{check_name}{Colors.NC}: Supported")
+                    elif check_name == "Permissions":
+                        print(f"✅ {Colors.GREEN}{check_name}{Colors.NC}: Write access confirmed")
+                    elif check_name == "Task Copilot":
+                        print(f"✅ {Colors.GREEN}{check_name}{Colors.NC}: Configured in .mcp.json")
+            else:
+                # Print error details
+                error_msg = next((msg for name, msg in self.errors if name == check_name), "FAILED")
+                print(f"❌ {Colors.RED}{check_name}{Colors.NC}: {error_msg}")
+
+        print()
+
+        # Print summary
+        if len(self.errors) == 0:
+            if len(self.warnings) > 0:
+                print(f"{Colors.YELLOW}All checks passed with {len(self.warnings)} warning(s). Orchestration should work.{Colors.NC}\n")
+            else:
+                print(f"{Colors.GREEN}All checks passed. Ready to orchestrate.{Colors.NC}\n")
+        else:
+            print(f"{Colors.RED}Pre-flight failed with {len(self.errors)} error(s). Fix issues above before running orchestration.{Colors.NC}\n")
 
 
 class Orchestrator:
@@ -592,11 +971,25 @@ Action: Execute yourself (you are 'me')
 Begin by querying your task list with task_list.
 """
 
-    def spawn_worker(self, stream_id: str, wait_for_deps: bool = True) -> bool:
-        """Spawn a Claude Code worker for a stream."""
+    def spawn_worker(self, stream_id: str, wait_for_deps: bool = True, skip_preflight: bool = False) -> bool:
+        """Spawn a Claude Code worker for a stream.
+
+        Args:
+            stream_id: The stream to spawn
+            wait_for_deps: Whether to check dependencies before spawning
+            skip_preflight: Skip preflight validation (used when called from start_all which already validated)
+        """
         if stream_id not in self.streams:
             error(f"Stream '{stream_id}' not found")
             return False
+
+        # Run preflight check if not skipped
+        if not skip_preflight:
+            validator = PreflightValidator(PROJECT_ROOT)
+            if not validator.validate_all():
+                validator.print_report()
+                return False
+            validator.print_report()
 
         stream = self.streams[stream_id]
 
@@ -658,6 +1051,29 @@ Begin by querying your task list with task_list.
 
             success(f"Created git worktree at {work_dir}")
 
+            # Validate the worktree was created correctly
+            validator = PreflightValidator(PROJECT_ROOT)
+            if not validator.validate_worktree(work_dir, PROJECT_ROOT):
+                validator.print_report()
+                # Clean up the failed worktree
+                log(f"Cleaning up invalid worktree at {work_dir}...")
+                try:
+                    shutil.rmtree(work_dir, ignore_errors=True)
+                    subprocess.run(
+                        ["git", "worktree", "remove", str(work_dir), "--force"],
+                        cwd=PROJECT_ROOT,
+                        capture_output=True
+                    )
+                    subprocess.run(["git", "worktree", "prune"], cwd=PROJECT_ROOT, capture_output=True)
+                except Exception as cleanup_err:
+                    warn(f"Cleanup warning: {cleanup_err}")
+
+                error(f"Worktree validation failed for {stream_id}")
+                error(f"Please remove the directory manually and re-run orchestrate generate")
+                return False
+
+            success(f"Worktree validated successfully")
+
         dependencies = self.stream_dependencies.get(stream_id, set())
         deps_str = f" (depends on: {', '.join(dependencies)})" if dependencies else " (no dependencies)"
 
@@ -713,6 +1129,15 @@ Begin by querying your task list with task_list.
         log(f"Starting dynamic orchestration for {PROJECT_NAME}")
         print()
 
+        # Pre-flight validation: check environment before spawning workers
+        validator = PreflightValidator(PROJECT_ROOT)
+        if not validator.validate_all():
+            validator.print_report()
+            sys.exit(1)
+
+        # Print report even on success to show what was validated
+        validator.print_report()
+
         # Pre-flight check: warn about non-'me' agent assignments
         if not self._preflight_check_agent_assignments():
             sys.exit(1)
@@ -739,7 +1164,7 @@ Begin by querying your task list with task_list.
             if new_ready:
                 log(f"Found {len(new_ready)} ready streams: {', '.join(new_ready)}")
                 for stream_id in new_ready:
-                    self.spawn_worker(stream_id, wait_for_deps=False)
+                    self.spawn_worker(stream_id, wait_for_deps=False, skip_preflight=True)
                     attempted.add(stream_id)
                     print()
 
@@ -749,7 +1174,7 @@ Begin by querying your task list with task_list.
                 if restart_counts[stream_id] < MAX_RESTARTS:
                     restart_counts[stream_id] += 1
                     warn(f"Worker {stream_id} died with incomplete tasks - restarting (attempt {restart_counts[stream_id]}/{MAX_RESTARTS})")
-                    self.spawn_worker(stream_id, wait_for_deps=False)
+                    self.spawn_worker(stream_id, wait_for_deps=False, skip_preflight=True)
                     print()
                 else:
                     error(f"Worker {stream_id} failed {MAX_RESTARTS} times - marking as stuck")
@@ -1080,11 +1505,18 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Claude Copilot Orchestrator")
-    parser.add_argument("command", choices=["start", "status", "stop", "logs", "test-routing"],
+    parser.add_argument("command", choices=["start", "status", "stop", "logs", "test-routing", "preflight"],
                        help="Command to run")
     parser.add_argument("stream_id", nargs="?", help="Stream ID (for start/stop/logs)")
 
     args = parser.parse_args()
+
+    # Handle preflight command separately (doesn't need Orchestrator initialization)
+    if args.command == "preflight":
+        validator = PreflightValidator(PROJECT_ROOT)
+        validator.validate_all()
+        validator.print_report()
+        sys.exit(0 if len(validator.errors) == 0 else 1)
 
     orchestrator = Orchestrator()
 
