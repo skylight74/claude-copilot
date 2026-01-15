@@ -275,6 +275,19 @@ for f in .claude/commands/*.md; do
     echo "OK: $f"
   fi
 done
+
+echo ""
+echo "=== Component Versions ==="
+if [ -f ~/.claude/copilot/VERSION.json ]; then
+  node -p "
+    const v = require('$HOME/.claude/copilot/VERSION.json');
+    console.log('Framework: v' + v.framework);
+    console.log('Agents: v' + v.components.agents.version);
+    Object.entries(v.components['mcp-servers']).forEach(([k,s]) =>
+      console.log(k + ': v' + s.version)
+    );
+  "
+fi
 ```
 
 ---

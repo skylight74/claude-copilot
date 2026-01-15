@@ -353,7 +353,14 @@ The generated `check-streams` script automatically detects the workspace ID from
 
 Before using orchestration:
 
-1. **Run `/orchestrate generate` first**: This creates PRD and tasks with proper stream metadata:
+1. **Validate environment** (optional but recommended):
+   ```bash
+   cd ~/.claude/copilot/templates/orchestration
+   python validate-setup.py --verbose
+   ```
+   This checks Python version, Claude CLI, Git, MCP configuration, and more.
+
+2. **Run `/orchestrate generate` first**: This creates PRD and tasks with proper stream metadata:
    ```json
    {
      "metadata": {
@@ -364,9 +371,9 @@ Before using orchestration:
    }
    ```
 
-2. **Python 3.7+** installed
+3. **Python 3.8+** installed
 
-3. **Git worktrees** (optional): For parallel streams working on different branches
+4. **Git worktrees** (optional): For parallel streams working on different branches
 
 ## Workflow
 
@@ -443,6 +450,13 @@ Execution:
 4. When Z completes → orchestration done
 
 ## Troubleshooting
+
+### Environment issues
+- **Run validation first:**
+  ```bash
+  python validate-setup.py --verbose --fix
+  ```
+  This checks Python, Claude CLI, Git, MCP config, and attempts fixes.
 
 ### "No streams found in Task Copilot database"
 - **Most common cause:** You ran `/orchestrate start` before `/orchestrate generate`

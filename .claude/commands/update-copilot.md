@@ -163,7 +163,24 @@ npm run generate-summary 2>/dev/null || echo "Warning: Could not generate summar
 
 ---
 
-## Step 10: Report Success
+## Step 10: Run Version Check
+
+Tell user: "Verifying all components..."
+
+```bash
+cd ~/.claude/copilot && ./scripts/check-versions.sh
+```
+
+This validates:
+- All MCP servers are built and version-matched
+- Agents have required sections
+- Global paths are configured
+
+**If errors:** Address them before continuing.
+
+---
+
+## Step 11: Report Success
 
 ```bash
 cd ~/.claude/copilot
