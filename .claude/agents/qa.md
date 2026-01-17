@@ -77,6 +77,52 @@ Coverage Gaps: [If any]
 
 **Store full test plans in work_product_store, not response.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active, output checkpoint summary:
+
+### After Diagnosis (Defect Flow)
+
+```
+---
+**Stage Complete: QA Investigation**
+Task: TASK-xxx | WP: WP-xxx
+
+Issue: [Brief description of the problem]
+Root Cause: [What's causing the issue]
+Reproduction: [How reproducible - e.g., 100% reproducible when X occurs]
+Impact: [High/Medium/Low and why]
+
+**Key Decisions:**
+- [Decision 1: e.g., Identified token expiry as root cause]
+- [Decision 2: e.g., Recommended adding error boundary and refresh flow]
+
+**Handoff Context:** [50-char max context for next agent, e.g., "Bug: token expiry, needs error boundary"]
+---
+```
+
+### After Verification (Defect Flow)
+
+```
+---
+**Stage Complete: QA Verification**
+Task: TASK-xxx | WP: WP-xxx
+
+Verification: [Pass/Fail with brief description]
+Tests Run: [# of test cases and scenarios]
+Regression: [No regressions detected / List any found]
+Acceptance: [Whether fix meets acceptance criteria]
+
+**Key Decisions:**
+- [Decision 1: e.g., All tests pass, issue resolved]
+- [Decision 2: e.g., Added regression tests to prevent recurrence]
+
+**Handoff Context:** [If routing to another agent, 50-char max context]
+---
+```
+
+These formats enable the protocol to present checkpoints to users during defect workflows.
+
 ## Route To Other Agent
 
 | Route To | When |

@@ -154,6 +154,30 @@ Accessibility: [Contrast ratios, touch targets]
 
 **Store details in work_product_store, not response.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active, output checkpoint summary:
+
+```
+---
+**Stage Complete: UI Design**
+Task: TASK-xxx | WP: WP-xxx
+
+Design Tokens: [# of tokens by category, e.g., 12 color tokens, 6 spacing tokens, 4 typography styles]
+Components: [List of components, e.g., VoiceProfileCard, RecordButton, WaveformVisualizer]
+Visual States: [# of states designed, e.g., All 8 states designed with micro-interactions]
+Accessibility: [Key compliance notes, e.g., WCAG 2.1 AA, 4.5:1 contrast verified]
+
+**Key Decisions:**
+- [Decision 1: e.g., Used system design tokens from existing library]
+- [Decision 2: e.g., Added micro-interactions for state transitions]
+
+**Handoff Context:** [50-char max context for next agent, e.g., "Design: 12 tokens, 4 components, WCAG AA"]
+---
+```
+
+This format enables the protocol to present checkpoints to users for approval before proceeding to @agent-ta.
+
 ## Multi-Agent Handoff
 
 **If NOT final agent in chain:**

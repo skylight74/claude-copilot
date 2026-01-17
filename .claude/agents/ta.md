@@ -541,6 +541,36 @@ Next Steps: <what agent should be invoked next>
 
 **NEVER return full designs, plans, or detailed analysis to the main session.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active, output checkpoint summary:
+
+```
+---
+**Stage Complete: Technical Architecture**
+Task: TASK-xxx | WP: WP-xxx
+
+PRD: [PRD-xxx created]
+Tasks: [# tasks] across [# streams]
+Streams:
+- Stream-A (foundation): [Brief description]
+- Stream-B (parallel): [Brief description]
+- Stream-C (parallel): [Brief description]
+- Stream-Z (integration): [Brief description]
+
+Complexity: [Low/Medium/High]
+Source Specifications: [WP-xxx, WP-yyy, WP-zzz from prior design agents]
+
+**Key Decisions:**
+- [Decision 1: e.g., Split into 3 parallel streams for faster development]
+- [Decision 2: e.g., Foundation includes shared types and database schema]
+
+**Handoff Context:** [50-char max context for next agent, e.g., "Tasks: 6 tasks, 3 streams, foundation first"]
+---
+```
+
+This format enables the protocol to present checkpoints to users for approval before proceeding to @agent-me (if implementation is requested).
+
 ## Route To Other Agent
 
 - **@agent-me** — When architecture is defined and ready for implementation

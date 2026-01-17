@@ -121,25 +121,61 @@ Ask yourself:
 - `/pause <reason>` - Create named checkpoint (e.g., `/pause switching to urgent bug`)
 - `/orchestrate <subcommand>` - Manage parallel orchestration (e.g., `/orchestrate start`, `/orchestrate status`)
 
+### Protocol Flow System
+
+The `/protocol` command uses intent detection to route work through the appropriate agent chain. There are four flows:
+
+**Flow A: Experience-First (DEFAULT)**
+- **Triggers:** Building features, adding functionality, creating UI, or no strong keywords
+- **Chain:** sd → uxd → uids → ta → me
+- **Checkpoints:** After sd, uxd, uids (user approves each stage)
+- **Philosophy:** Design before code, think about user journey first
+
+**Flow B: Defect**
+- **Triggers:** Keywords like bug, broken, fix, error, not working, crash
+- **Chain:** qa → me → qa
+- **Checkpoints:** After qa diagnosis, after me fix
+- **Philosophy:** Diagnose thoroughly, fix with tests, verify resolution
+
+**Flow C: Technical-Only**
+- **Triggers:** Keywords like refactor, optimize, architecture, performance, or `--technical` flag
+- **Chain:** ta → me
+- **Checkpoints:** After ta planning
+- **Philosophy:** Plan architecture first, then implement cleanly
+
+**Flow D: Clarification**
+- **Triggers:** Ambiguous keywords like improve, enhance, update, change
+- **Behavior:** Ask user to clarify intent (experience/technical/defect) before routing
+- **Philosophy:** Never assume - get explicit direction when unclear
+
+**Escape Hatches:**
+- Use `--technical`, `--defect`, or `--experience` flags to force a specific flow
+- Use `--skip-sd`, `--skip-uxd`, `--skip-uids` to bypass design stages
+- Use `--no-checkpoints` to run full chain without pausing
+- Use `--verbose` or `--minimal` to control checkpoint verbosity
+
 ### Agent Selection Matrix
 
-| Scenario | Start With | Then Route To | Why |
-|----------|------------|---------------|-----|
-| Bug reported | `/protocol` (DEFECT) | `@agent-qa` | Reproduce, diagnose, test fix |
-| New feature | `/protocol` (EXPERIENCE) | `@agent-sd` → `@agent-uxd` | Journey design → interaction |
-| Architecture question | `/protocol` (ARCHITECTURE) | `@agent-ta` | System design expertise |
-| Code implementation | `/protocol` (FEATURE) | `@agent-me` | Write production code |
-| Security concern | Any agent | `@agent-sec` | Vulnerability analysis |
-| API documentation | Any agent | `@agent-doc` | Technical writing |
-| CI/CD pipeline | `/protocol` (DEVOPS) | `@agent-do` | Infrastructure automation |
-| UI component | `@agent-uids` | `@agent-uid` | Visual design → implementation |
+| Scenario | Start With | Agent Chain | Why |
+|----------|------------|-------------|-----|
+| Bug reported | `/protocol fix [issue]` | qa → me → qa | Diagnose → fix → verify |
+| New feature | `/protocol add [feature]` | sd → uxd → uids → ta → me | Experience-first design |
+| Architecture question | `/protocol [technical work]` | ta → me | System design expertise |
+| Refactor/optimize | `/protocol refactor [component]` | ta → me | Technical improvements |
+| Security concern | Any agent | Route to `@agent-sec` | Vulnerability analysis |
+| API documentation | Any agent | Route to `@agent-doc` | Technical writing |
+| CI/CD pipeline | `/protocol` + technical keywords | ta → do → me | Infrastructure automation |
+| Ambiguous request | `/protocol [vague description]` | Clarification flow | Ask user intent first |
 
 ### Use Case Mapping
 
-| I want to... | Start with | Next Step |
-|--------------|------------|-----------|
-| Fix a bug | `/protocol fix the login bug` | Auto-routes to @agent-qa |
-| Build a feature | `/protocol add dark mode UI` | Auto-routes to @agent-sd |
+| I want to... | Start with | What Happens |
+|--------------|------------|--------------|
+| Fix a bug | `/protocol fix the login bug` | Defect flow: qa → me → qa |
+| Build a feature | `/protocol add dark mode UI` | Experience flow: sd → uxd → uids → ta → me |
+| Refactor code | `/protocol refactor auth module` | Technical flow: ta → me |
+| Improve something | `/protocol improve dashboard` | Clarification flow (asks intent) |
+| Skip design stages | `/protocol --skip-sd add feature` | Jumps to specified stage |
 | Resume yesterday's work | `/continue` | Memory loads automatically |
 | Resume specific stream | `/continue Stream-B` | Loads stream context directly |
 | Context switch mid-task | `/pause switching to X` | Creates checkpoint, switch safely |
