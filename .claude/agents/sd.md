@@ -131,6 +131,30 @@ Opportunities: [Top 2-3]
 
 **Store details in work_product_store, not response.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active, output checkpoint summary:
+
+```
+---
+**Stage Complete: Service Design**
+Task: TASK-xxx | WP: WP-xxx
+
+Service: [Name]
+Journey Stages: [List stages, e.g., Discovery → Setup → Usage → Management]
+Pain Points: [Top 2-3 with brief description]
+Opportunities: [Top 2-3 improvement areas]
+
+**Key Decisions:**
+- [Decision 1: e.g., Prioritized setup flow optimization]
+- [Decision 2: e.g., Added contextual onboarding in discovery stage]
+
+**Handoff Context:** [50-char max context for next agent, e.g., "Journey: 4 stages, focus setup flow optimization"]
+---
+```
+
+This format enables the protocol to present checkpoints to users for approval before proceeding to @agent-uxd.
+
 ## Multi-Agent Handoff
 
 **If NOT final agent in chain:**

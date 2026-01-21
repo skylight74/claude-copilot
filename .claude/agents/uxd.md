@@ -145,6 +145,29 @@ Accessibility: [Key WCAG considerations]
 
 **Store details in work_product_store, not response.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active, output checkpoint summary:
+
+```
+---
+**Stage Complete: UX Design**
+Task: TASK-xxx | WP: WP-xxx
+
+Interactions: [# of states designed, e.g., 8 states designed]
+Key Flows: [Top 2-3 flows, e.g., First-time setup (3 steps), Quick record (1-tap)]
+Accessibility: [WCAG level and key considerations, e.g., WCAG 2.1 AA, keyboard navigation, screen reader optimized]
+
+**Key Decisions:**
+- [Decision 1: e.g., Reduced setup flow from 5 to 3 steps]
+- [Decision 2: e.g., Added inline error recovery for all form states]
+
+**Handoff Context:** [50-char max context for next agent, e.g., "Flows: 8 states, focus first-time setup flow"]
+---
+```
+
+This format enables the protocol to present checkpoints to users for approval before proceeding to @agent-uids.
+
 ## Multi-Agent Handoff
 
 **If NOT final agent in chain:**

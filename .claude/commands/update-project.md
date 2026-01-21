@@ -187,8 +187,9 @@ Tell the user:
 **Ready to update project**
 
 This will refresh:
-- `.claude/commands/protocol.md` and `continue.md`
+- `.claude/commands/` (8 project commands)
 - `.claude/agents/*.md` (all 12 agents)
+- `.claude/orchestrator/` (if present - Python scripts and shell utilities)
 
 This will ONLY update if needed:
 - `.mcp.json` (only to add new MCP servers, preserving all existing configuration)
@@ -256,7 +257,40 @@ echo "Agents updated"
 
 ---
 
-## Step 9: Verify Update
+## Step 9: Update Orchestrator Files (if present)
+
+**Only update if orchestrator directory exists** (project has used `/orchestrate` before):
+
+```bash
+if [ -d ".claude/orchestrator" ]; then
+  echo "=== Updating Orchestrator Files ==="
+
+  # Copy Python scripts (preserve symlinks or update files)
+  cp ~/.claude/copilot/templates/orchestration/task_copilot_client.py .claude/orchestrator/
+  cp ~/.claude/copilot/templates/orchestration/check_streams_data.py .claude/orchestrator/
+  cp ~/.claude/copilot/templates/orchestration/orchestrate.py .claude/orchestrator/
+  cp ~/.claude/copilot/templates/orchestration/monitor-workers.py .claude/orchestrator/
+
+  # Copy shell scripts
+  cp ~/.claude/copilot/templates/orchestration/check-streams .claude/orchestrator/
+  cp ~/.claude/copilot/templates/orchestration/watch-status .claude/orchestrator/
+
+  # Ensure scripts are executable
+  chmod +x .claude/orchestrator/check-streams
+  chmod +x .claude/orchestrator/watch-status
+  chmod +x .claude/orchestrator/orchestrate.py
+
+  echo "Orchestrator files updated"
+  ORCHESTRATOR_UPDATED=true
+else
+  echo "No orchestrator directory found (skipping)"
+  ORCHESTRATOR_UPDATED=false
+fi
+```
+
+---
+
+## Step 10: Verify Update
 
 ```bash
 echo "=== Updated Commands ==="
@@ -292,7 +326,7 @@ fi
 
 ---
 
-## Step 10: Report Success
+## Step 11: Report Success
 
 ```bash
 # Get Claude Copilot version
@@ -333,6 +367,9 @@ Tell user:
 **Refreshed:**
 - `.claude/commands/` (8 project commands: protocol, continue, pause, map, memory, extensions, orchestrate)
 - `.claude/agents/` (12 agents)
+{{IF_ORCHESTRATOR_UPDATED}}
+- `.claude/orchestrator/` (Python scripts and shell utilities)
+{{END_IF}}
 
 **MCP Configuration:**
 {{IF_SERVERS_ADDED}}
@@ -345,6 +382,9 @@ Tell user:
 - `CLAUDE.md`
 - `.claude/skills/`
 - Existing MCP server configurations
+{{IF_NO_ORCHESTRATOR}}
+- `.claude/orchestrator/` not present (run `/orchestrate setup` to initialize)
+{{END_IF}}
 
 **Claude Copilot Version:** $COPILOT_VERSION
 

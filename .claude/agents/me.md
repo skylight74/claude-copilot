@@ -87,6 +87,32 @@ Summary: [2-3 sentences]
 
 **Store details in work_product_store, not response.**
 
+## Protocol Integration
+
+When invoked via /protocol with checkpoint system active (if implementation checkpoints needed), output checkpoint summary:
+
+```
+---
+**Stage Complete: Implementation**
+Task: TASK-xxx | WP: WP-xxx
+
+Files Modified: [# files changed]
+Key Changes:
+- [File/component 1]: [Brief description]
+- [File/component 2]: [Brief description]
+
+Tests: [All passing / # new tests added]
+
+**Key Decisions:**
+- [Decision 1: e.g., Used existing auth pattern for consistency]
+- [Decision 2: e.g., Added error boundary for graceful degradation]
+
+**Handoff Context:** [If routing to another agent, 50-char max context, e.g., "Impl: auth fixed, 3 files, tests pass"]
+---
+```
+
+This format enables the protocol to present checkpoints to users if implementation requires approval (e.g., before verification in defect flows).
+
 ## Route To Other Agent
 
 | Route To | When |
