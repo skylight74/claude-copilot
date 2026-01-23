@@ -26,19 +26,19 @@
 
 It's not separate software—it's markdown files (agents, commands, project instructions) and three MCP servers that give Claude Code new capabilities:
 
-| You Get | What It Does |
-|---------|--------------|
-| **Persistent Memory** | Decisions, lessons, and progress survive across sessions |
-| **13 Lean Agents** | Specialist agents (~60-100 lines) with on-demand skill loading |
-| **Auto-Load Skills** | Agents detect and load relevant skills based on context (file patterns + keywords) |
-| **Parallel Orchestration** | Headless workers execute streams concurrently with `/orchestrate` |
-| **Pause & Resume** | Context switch mid-task with `/pause`, return with `/continue` |
-| **Task Management** | PRDs, tasks, and work products with minimal context usage |
-| **Stream Management** | Parallel work streams with conflict detection and dependencies |
-| **Knowledge Search** | Your company docs, available in every project |
-| **Extensions System** | Override or extend agents with your company methodologies |
-| **Skills on Demand** | 25K+ patterns and best practices, loaded when needed |
-| **Context Engineering** | Auto-compaction, continuation enforcement, activation modes |
+| You Get                    | What It Does                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| **Persistent Memory**      | Decisions, lessons, and progress survive across sessions                           |
+| **13 Lean Agents**         | Specialist agents (~60-100 lines) with on-demand skill loading                     |
+| **Auto-Load Skills**       | Agents detect and load relevant skills based on context (file patterns + keywords) |
+| **Parallel Orchestration** | Headless workers execute streams concurrently with `/orchestrate`                  |
+| **Pause & Resume**         | Context switch mid-task with `/pause`, return with `/continue`                     |
+| **Task Management**        | PRDs, tasks, and work products with minimal context usage                          |
+| **Stream Management**      | Parallel work streams with conflict detection and dependencies                     |
+| **Knowledge Search**       | Your company docs, available in every project                                      |
+| **Extensions System**      | Override or extend agents with your company methodologies                          |
+| **Skills on Demand**       | 25K+ patterns and best practices, loaded when needed                               |
+| **Context Engineering**    | Auto-compaction, continuation enforcement, activation modes                        |
 
 When Claude Code reads these instructions, it transforms from a generic assistant into a full development team that remembers your work.
 
@@ -125,8 +125,9 @@ cd ~/.claude/copilot && claude
 ```
 
 Then say:
+
 ```
-Read @~/.claude/copilot/SETUP.md and set up Claude Copilot on this machine
+Read @SETUP.md and set up Claude Copilot on this machine
 ```
 
 ### 3. Project Setup (each project)
@@ -136,6 +137,7 @@ cd ~/your-project && claude
 ```
 
 Then run:
+
 ```
 /setup-project
 ```
@@ -164,18 +166,21 @@ Two patterns cover most development work:
 **What happens step-by-step:**
 
 1. **Protocol classifies your request:**
+
    ```
    [PROTOCOL: DEFECT | Agent: @agent-qa | Action: INVOKING]
    Detected: Bug fix → Routing to QA Engineer...
    ```
 
 2. **@agent-qa diagnoses:**
+
    ```
    Bug reproduced. Root cause: Missing preventDefault() on keyDown handler.
    Routing to @agent-me for fix...
    ```
 
 3. **@agent-me implements:**
+
    ```
    Fix implemented:
    - Added e.preventDefault() to handleKeyDown
@@ -274,21 +279,21 @@ All streams completed. 18 git commits created.
 
 ### Quick Commands
 
-| Command | Use For |
-|---------|---------|
-| `/protocol [task]` | Start any work |
-| `/continue` | Resume yesterday's work |
-| `/pause [reason]` | Context switch, save state |
-| `/orchestrate start` | Run parallel workers |
-| `./watch-status` | Monitor progress (second terminal) |
+| Command              | Use For                            |
+| -------------------- | ---------------------------------- |
+| `/protocol [task]`   | Start any work                     |
+| `/continue`          | Resume yesterday's work            |
+| `/pause [reason]`    | Context switch, save state         |
+| `/orchestrate start` | Run parallel workers               |
+| `./watch-status`     | Monitor progress (second terminal) |
 
 ### Work Intensity Keywords
 
-| Keyword | Use For | Example |
-|---------|---------|---------|
-| `quick` | Typos, obvious fixes | `/protocol quick fix the typo` |
-| `thorough` | Deep review, full testing | `/protocol thorough review auth` |
-| `ultrawork` | Multi-day features | `/protocol ultrawork redesign auth` |
+| Keyword     | Use For                   | Example                             |
+| ----------- | ------------------------- | ----------------------------------- |
+| `quick`     | Typos, obvious fixes      | `/protocol quick fix the typo`      |
+| `thorough`  | Deep review, full testing | `/protocol thorough review auth`    |
+| `ultrawork` | Multi-day features        | `/protocol ultrawork redesign auth` |
 
 → [Full usage guide with more scenarios](docs/70-reference/01-usage-guide.md)
 
@@ -306,21 +311,21 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 ## Your Team
 
-| Agent | Role | When to Use |
-|-------|------|-------------|
-| `ta` | Tech Architect | System design, task breakdown, ADRs |
-| `me` | Engineer | Implementation, bug fixes, refactoring |
-| `qa` | QA Engineer | Testing strategy, edge cases, verification |
-| `sec` | Security | Vulnerabilities, threat modeling, OWASP |
-| `doc` | Documentation | READMEs, API docs, technical writing |
-| `do` | DevOps | CI/CD, infrastructure, containers |
-| `sd` | Service Designer | Customer journeys, experience strategy |
-| `uxd` | UX Designer | Task flows, wireframes, accessibility |
-| `uids` | UI Designer | Visual design, design systems, tokens |
-| `uid` | UI Developer | Component implementation, responsive UI |
-| `cw` | Copywriter | Microcopy, error messages, voice |
-| `cco` | Creative Chief | Creative direction, brand strategy |
-| `kc` | Knowledge Copilot | Shared knowledge setup |
+| Agent  | Role              | When to Use                                |
+| ------ | ----------------- | ------------------------------------------ |
+| `ta`   | Tech Architect    | System design, task breakdown, ADRs        |
+| `me`   | Engineer          | Implementation, bug fixes, refactoring     |
+| `qa`   | QA Engineer       | Testing strategy, edge cases, verification |
+| `sec`  | Security          | Vulnerabilities, threat modeling, OWASP    |
+| `doc`  | Documentation     | READMEs, API docs, technical writing       |
+| `do`   | DevOps            | CI/CD, infrastructure, containers          |
+| `sd`   | Service Designer  | Customer journeys, experience strategy     |
+| `uxd`  | UX Designer       | Task flows, wireframes, accessibility      |
+| `uids` | UI Designer       | Visual design, design systems, tokens      |
+| `uid`  | UI Developer      | Component implementation, responsive UI    |
+| `cw`   | Copywriter        | Microcopy, error messages, voice           |
+| `cco`  | Creative Chief    | Creative direction, brand strategy         |
+| `kc`   | Knowledge Copilot | Shared knowledge setup                     |
 
 → [Meet your full team](docs/10-architecture/01-agents.md)
 
@@ -328,17 +333,17 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 ## All Commands
 
-| Command | Purpose |
-|---------|---------|
-| `/protocol [task]` | Start work (auto-routes to right agent) |
-| `/continue [stream]` | Resume from memory or specific stream |
-| `/pause [reason]` | Save checkpoint for context switch |
-| `/orchestrate start` | Launch parallel workers |
-| `/orchestrate status` | Check stream progress |
-| `/map` | Generate project structure analysis |
-| `/setup-project` | Initialize a new project |
-| `/setup-knowledge-sync` | Enable auto-updates on releases |
-| `/knowledge-copilot` | Build shared knowledge repo |
+| Command                 | Purpose                                 |
+| ----------------------- | --------------------------------------- |
+| `/protocol [task]`      | Start work (auto-routes to right agent) |
+| `/continue [stream]`    | Resume from memory or specific stream   |
+| `/pause [reason]`       | Save checkpoint for context switch      |
+| `/orchestrate start`    | Launch parallel workers                 |
+| `/orchestrate status`   | Check stream progress                   |
+| `/map`                  | Generate project structure analysis     |
+| `/setup-project`        | Initialize a new project                |
+| `/setup-knowledge-sync` | Enable auto-updates on releases         |
+| `/knowledge-copilot`    | Build shared knowledge repo             |
 
 → [Orchestration Guide](docs/50-features/01-orchestration-guide.md) | [Knowledge Sync](docs/50-features/03-knowledge-sync.md)
 
@@ -346,10 +351,10 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 
 ## Works Alone, Grows With Teams
 
-| Level | What You Get |
-|-------|--------------|
-| **Solo** | 13 agents, persistent memory, local skills |
-| **Team** | + shared knowledge, private skills via PostgreSQL |
+| Level          | What You Get                                          |
+| -------------- | ----------------------------------------------------- |
+| **Solo**       | 13 agents, persistent memory, local skills            |
+| **Team**       | + shared knowledge, private skills via PostgreSQL     |
 | **Enterprise** | + Skill Marketplace (25K+ skills), full customization |
 
 → [Customization guide](docs/20-configuration/02-customization.md) | [Extension Spec](docs/40-extensions/00-extension-spec.md)
@@ -359,12 +364,13 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 ## Requirements
 
 | Requirement | Version |
-|-------------|---------|
-| Node.js | 18+ |
-| Claude Code | Latest |
-| Disk space | ~300MB |
+| ----------- | ------- |
+| Node.js     | 18+     |
+| Claude Code | Latest  |
+| Disk space  | ~300MB  |
 
 **Build tools:**
+
 - macOS: `xcode-select --install`
 - Linux: `sudo apt-get install build-essential python3`
 
@@ -407,6 +413,7 @@ Creates a Git-managed knowledge repository for company information, shareable vi
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 When modifying agents:
+
 - Keep base agents generic (no company-specific content)
 - Use industry-standard methodologies
 - Include routing to other agents
