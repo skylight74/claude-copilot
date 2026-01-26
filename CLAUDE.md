@@ -517,6 +517,147 @@ Commands enforcing battle-tested workflows.
 
 ---
 
+## OMC Features
+
+Five productivity enhancements inspired by [Oh My Claude Code](https://github.com/code-yeongyu/oh-my-opencode):
+
+### 1. Ecomode - Smart Model Routing
+
+Automatically routes tasks to appropriate Claude model (haiku/sonnet/opus) based on complexity scoring.
+
+**Usage in task titles:**
+```
+eco: Fix the login bug                    → Auto-selects based on complexity
+opus: Design microservices architecture   → Forces Claude Opus
+fast: Update README typo                  → Forces Claude Haiku (fastest)
+sonnet: Refactor authentication module    → Forces Claude Sonnet
+```
+
+**How it works:**
+- Analyzes task title, description, file count, and agent type
+- Calculates complexity score (0.0 to 1.0)
+- Routes: < 0.3 = haiku, 0.3-0.7 = sonnet, > 0.7 = opus
+- Supports explicit overrides with keywords
+
+**Benefits:**
+- Cost optimization for simple tasks
+- Performance boost with haiku for quick fixes
+- Automatic scaling to opus for complex work
+
+### 2. Magic Keywords - Quick Action Routing
+
+Action keywords at message start suggest agent routing and task type.
+
+**Supported keywords:**
+```
+fix: Authentication not working           → Routes to @agent-qa
+add: Dark mode to dashboard              → Routes to @agent-me
+refactor: Database connection pool       → Routes to @agent-ta
+optimize: API response time              → Routes to @agent-ta
+test: Login flow edge cases              → Routes to @agent-qa
+doc: API endpoints                       → Routes to @agent-doc
+deploy: Production environment           → Routes to @agent-do
+```
+
+**Combine with modifiers:**
+```
+eco: fix: login bug                      → QA agent + auto-model
+fast: doc: quick API reference           → Doc agent + haiku
+opus: add: complex feature               → Engineer + opus
+```
+
+**Rules:**
+- Keywords must be at message start
+- Case-insensitive matching
+- Max 1 modifier + 1 action keyword
+- False positive prevention (e.g., "economics:" ignored)
+
+### 3. Progress HUD - Live Status Display
+
+Real-time statusline showing task progress, model in use, and token estimates.
+
+**Format:**
+```
+[Stream-A] ▶ 50% | sonnet | ~1.2k tokens
+[Stream-B] ✓ 100% | haiku | ~500 tokens
+```
+
+**Components:**
+- Stream/task identifier
+- Progress indicator with unicode symbols (⏸ ▶ ⚠ ✓)
+- Model indicator with color coding
+- Token usage estimate
+- Optional: Active file tracking
+
+**Usage:**
+```typescript
+const hud = createStatusline('TASK-123', 'Fix auth bug', 'Stream-A');
+hud.updateState({ status: 'in_progress', progressPercent: 50 });
+hud.updateModel('sonnet');
+const rendered = hud.render(); // → "[Stream-A] ▶ 50% | sonnet | ~1.2k"
+```
+
+### 4. Skill Extraction - Auto-Detect Patterns
+
+Automatically detects repeated patterns in work and suggests skill extractions.
+
+**Detection:**
+- File patterns (e.g., "always use X pattern in src/auth/**/*.ts")
+- Keyword patterns (e.g., "error handling", "validation", "testing")
+- Workflow patterns (e.g., "run tests before commit")
+- Best practices (e.g., "use async/await, not callbacks")
+
+**Workflow:**
+1. Pattern detection runs after task completion
+2. Suggests skill creation with confidence score
+3. Review and approve via `/skills-approve` command
+4. Auto-generates skill file with:
+   - Pattern description
+   - Usage examples
+   - Trigger conditions (files/keywords)
+   - Quality checklist
+
+**Benefits:**
+- Builds team knowledge automatically
+- Reduces repetitive explanations
+- Improves consistency across sessions
+
+### 5. Zero-Config Install - One Command Setup
+
+Simple installer with automatic dependency checking and fixing.
+
+**Primary method:**
+```bash
+# Install globally with auto-fix
+npx claude-copilot install --global --auto-fix
+
+# Install to project
+npx claude-copilot install --project .
+```
+
+**Features:**
+- Auto-detects missing dependencies (Node.js, Git, build tools)
+- Platform-specific fixes (Homebrew on macOS, apt/dnf/pacman on Linux)
+- Validates installation after completion
+- Clear error messages with recovery instructions
+
+**Commands:**
+```bash
+npx claude-copilot check         # Check dependencies
+npx claude-copilot validate      # Validate installation
+npx claude-copilot install       # Install with options
+```
+
+**What it replaces:**
+- Manual dependency installation
+- Manual MCP server builds
+- Manual directory creation
+- Manual configuration setup
+
+See `packages/installer/README.md` for full documentation.
+
+---
+
 ## Agent Routing
 
 Agents route to each other based on expertise:

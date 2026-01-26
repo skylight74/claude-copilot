@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-01-26
+
+### Added
+
+- **OMC Features - Five Productivity Enhancements**:
+  - **Ecomode**: Smart model routing (haiku/sonnet/opus) based on complexity scoring
+    - Automatic complexity analysis from task title, description, file count, agent type
+    - Modifier keywords for explicit overrides: `eco:`, `opus:`, `fast:`, `sonnet:`, `haiku:`
+    - Cost optimization: < 0.3 complexity → haiku, 0.3-0.7 → sonnet, > 0.7 → opus
+    - Model router at `mcp-servers/task-copilot/src/ecomode/model-router.ts`
+
+  - **Magic Keywords**: Action keywords for quick agent routing and task type detection
+    - Supported: `fix:`, `add:`, `refactor:`, `optimize:`, `test:`, `doc:`, `deploy:`
+    - Suggests agent routing (e.g., `fix:` → @agent-qa, `add:` → @agent-me)
+    - Combines with modifiers: `eco: fix: login bug` or `fast: doc: API`
+    - Parser at `.claude/commands/keyword-parser.ts`
+    - False positive prevention (e.g., "economics:" not matched)
+
+  - **Progress HUD**: Live statusline with task progress, model, and token estimates
+    - Format: `[Stream-A] ▶ 50% | sonnet | ~1.2k tokens`
+    - Unicode progress indicators (⏸ pending, ▶ in progress, ⚠ blocked, ✓ completed)
+    - Color-coded model display (green haiku, yellow sonnet, magenta opus)
+    - Statusline component at `mcp-servers/task-copilot/src/hud/statusline.ts`
+    - Event-driven updates via `StatuslineUpdater` class
+
+  - **Skill Extraction**: Auto-detect repeated patterns and suggest skill creation
+    - Detects file patterns, keyword patterns, workflow patterns, best practices
+    - Confidence scoring for pattern candidates
+    - Pattern detection at `mcp-servers/copilot-memory/src/tools/pattern-detection.ts`
+    - Review and approval via `/skills-approve` command
+    - Auto-generates skill files with triggers and quality checklists
+
+  - **Zero-Config Install**: One-command installer with dependency auto-fix
+    - `npx claude-copilot install --global --auto-fix` for complete setup
+    - Auto-detects missing dependencies (Node.js, Git, build tools)
+    - Platform-specific fixes: Homebrew (macOS), apt/dnf/pacman (Linux)
+    - Commands: `check` (dependencies), `validate` (installation), `install` (setup)
+    - Installer package at `packages/installer/`
+
+- **OMC Feature Types**:
+  - New type definitions at `mcp-servers/task-copilot/src/types/omc-features.ts`
+  - Interfaces: `ComplexityScore`, `ModelRoute`, `ModifierKeyword`, `ActionKeyword`
+  - Interfaces: `ParsedCommand`, `StatuslineState`, `ProgressEvent`, `PatternCandidate`
+
+- **Integration Tests**:
+  - Comprehensive test suite at `tests/integration/omc-features.test.ts`
+  - Tests all 5 features individually and in integration
+  - 40+ test cases covering edge cases and workflows
+
+### Changed
+
+- **SETUP.md**: Zero-config install now primary method (manual setup alternative)
+- **CLAUDE.md**: Added "OMC Features" section with usage examples and quick reference
+
+### Documentation
+
+- Added OMC features overview in CLAUDE.md with usage patterns
+- Updated SETUP.md with npx installer as recommended approach
+- Comprehensive test coverage for all features
+- Feature documentation includes benefits and practical examples
+
+### Acknowledgements
+
+- Inspired by [Oh My Claude Code](https://github.com/code-yeongyu/oh-my-opencode) by @code-yeongyu
+- Ecomode concept adapted from OMC's ralph/auto routing
+- Magic keywords adapted from OMC's action prefixes
+- Progress HUD adapted from OMC's statusline
+- Skill extraction adapted from OMC's pattern learning
+- Zero-config install adapted from OMC's setup simplification
+
 ## [2.7.1] - 2026-01-17
 
 ### Changed
