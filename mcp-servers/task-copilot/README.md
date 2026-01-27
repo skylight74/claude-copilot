@@ -18,6 +18,66 @@ MCP server providing PRD and task management for Claude Code.
 - **Activation Modes** (v1.8+): Auto-detect execution modes (ultrawork, analyze, quick, thorough) with GSD-inspired constraints
 - **Verification Enforcement** (v1.8+): Opt-in blocking of task completion without acceptance criteria and proof
 - **Progress Visibility** (v1.8+): ASCII progress bars, milestone tracking, velocity trends with 7d/14d/30d windows
+- **Ecomode** (v2.7+): Smart model routing (haiku/sonnet/opus) based on task complexity scoring
+- **Progress HUD** (v2.7+): Real-time terminal status display with capability detection
+
+## OMC Feature Modules
+
+Two new module directories provide OMC-inspired productivity features:
+
+### Ecomode (`src/ecomode/`)
+
+Smart model routing based on task complexity analysis.
+
+| File | Purpose |
+|------|---------|
+| `complexity-scorer.ts` | Analyzes task complexity (0.0-1.0 score) based on keywords, file count, agent type |
+| `model-router.ts` | Routes to haiku/sonnet/opus based on score; supports modifier keywords |
+
+**Usage:**
+
+```typescript
+import { routeToModel } from 'task-copilot/ecomode/model-router';
+
+// Auto-select model based on complexity
+const result = routeToModel({ title: 'Fix login bug', fileCount: 1, agentId: 'qa' });
+// → model: 'haiku', score: 0.23
+
+// Force model with keyword
+const result2 = routeToModel({ title: 'opus: Design architecture' });
+// → model: 'opus', isOverride: true
+```
+
+**Thresholds:** < 0.3 → haiku, 0.3-0.7 → sonnet, > 0.7 → opus
+
+### Progress HUD (`src/hud/`)
+
+Terminal UI components for real-time status display.
+
+| File | Purpose |
+|------|---------|
+| `statusline.ts` | Progress display: `[Stream-A] ▶ 50% \| sonnet \| ~1.2k tokens` |
+| `terminal-compat.ts` | Capability detection (color, unicode, TTY) with ASCII fallbacks |
+| `websocket-client.ts` | Optional real-time event streaming |
+
+**Usage:**
+
+```typescript
+import { createStatusline } from 'task-copilot/hud/statusline';
+import { renderProgressBar } from 'task-copilot/hud/terminal-compat';
+
+// Create statusline
+const hud = createStatusline('TASK-123', 'Fix bug', 'Stream-A');
+hud.updateState({ status: 'in_progress', progressPercent: 50 });
+console.log(hud.render().text);
+// → [Stream-A] ▶ 50% | sonnet
+
+// Render progress bar
+renderProgressBar(75);
+// → [###############-----]
+```
+
+**Documentation:** See `docs/50-features/ecomode.md` and `docs/50-features/progress-hud.md`
 
 ## Installation
 
